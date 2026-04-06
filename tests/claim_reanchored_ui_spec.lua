@@ -84,6 +84,7 @@ end
 
 t.assert_eq(reanchored_line ~= nil, true, "panel lines should include the reanchored claim")
 t.assert_match(reanchored_line, "%[reanchored%] moved note", "panel text should expose the same reanchored marker")
+t.assert_match(reanchored_line, "QUESTION%s%s%s%[reanchored%] moved note", "panel claim rows should keep extra padding between the kind label and note")
 t.assert_eq(reanchored_item ~= nil, true, "panel lines should expose the reanchored claim item")
 
 local kind_highlight

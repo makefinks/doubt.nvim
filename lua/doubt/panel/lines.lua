@@ -2,6 +2,7 @@ local claims = require("doubt.claims")
 
 local M = {}
 local CLAIM_KIND_CELL_WIDTH = 8
+local CLAIM_NOTE_PADDING = "   "
 
 local function count_claims(files)
 	local total = 0
@@ -211,7 +212,7 @@ local function build_claim_lines(path, claim, panel_width)
 	local items = {}
 
 	if pw >= 50 then
-		local prefix = string.format("  %-16s  %s ", line_label, kind_cell)
+		local prefix = string.format("  %-16s  %s%s", line_label, kind_cell, CLAIM_NOTE_PADDING)
 		local kind_col = string.find(prefix, kind_cell, 1, true)
 		local continuation_prefix = string.rep(" ", vim.fn.strdisplaywidth(prefix))
 		local note_width = math.max(pw - vim.fn.strdisplaywidth(prefix), 1)
@@ -254,7 +255,7 @@ local function build_claim_lines(path, claim, panel_width)
 		}))
 		add_highlight(items[#items], 2, 2 + #line_label, "DoubtPanelMuted")
 
-		local meta_prefix = string.format("    %s ", kind_cell)
+		local meta_prefix = string.format("    %s%s", kind_cell, CLAIM_NOTE_PADDING)
 		local meta_kind_col = string.find(meta_prefix, kind_cell, 1, true)
 		local meta_cont = string.rep(" ", vim.fn.strdisplaywidth(meta_prefix))
 		local note_width = math.max(pw - vim.fn.strdisplaywidth(meta_prefix), 1)
