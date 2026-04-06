@@ -1,0 +1,1 @@
+require("doubt").setup()

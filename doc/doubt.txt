@@ -1,0 +1,143 @@
+*doubt.nvim* skeptical code review sessions for Neovim
+
+Author: doubt.nvim contributors
+
+===============================================================================
+CONTENTS                                                      *doubt-contents*
+
+1. Introduction...........................................|doubt-introduction|
+2. Requirements.............................................|doubt-requirements|
+3. Installation...........................................|doubt-installation|
+4. Commands...................................................|doubt-commands|
+5. Keymaps.....................................................|doubt-keymaps|
+6. Configuration.........................................|doubt-configuration|
+7. Healthcheck.............................................|doubt-healthcheck|
+
+===============================================================================
+INTRODUCTION                                              *doubt-introduction*
+
+doubt.nvim helps review code by attaching persistent claims directly to files.
+Claims stay grouped in sessions, render inline and in the side panel, and can be
+exported as XML or wrapped handoff prompts for downstream agents.
+
+Built-in claim kinds:
+
+- question
+- concern
+- reject
+
+===============================================================================
+REQUIREMENTS                                              *doubt-requirements*
+
+- Neovim 0.10+
+- MunifTanjim/nui.nvim
+
+===============================================================================
+INSTALLATION                                              *doubt-installation*
+
+Example with lazy.nvim:
+
+>
+	{
+		"makefinks/doubt.nvim",
+		dependencies = { "MunifTanjim/nui.nvim" },
+		config = function()
+			require("doubt").setup()
+		end,
+	}
+<
+
+After installation, run `:DoubtPanel` to confirm the plugin loaded.
+
+===============================================================================
+COMMANDS                                                      *doubt-commands*
+
+Main review actions:
+
+- `:DoubtQuestion [note]`
+- `:DoubtConcern [note]`
+- `:DoubtReject [note]`
+- `:DoubtClaim <kind> [note]`
+- `:DoubtClaimDelete`
+- `:DoubtClaimKind <kind>`
+- `:DoubtClaimNote [note]`
+- `:DoubtClaimToggle`
+- `:DoubtPanel`
+- `:DoubtExport [template]`
+- `:DoubtExportFilter`
+- `:DoubtExportXml`
+- `:DoubtHealthcheck`
+- `:DoubtClearBuffer`
+- `:DoubtRefresh`
+- `:DoubtState`
+
+Session management:
+
+- `:DoubtSessionNew [name]`
+- `:DoubtSessionResume [name]`
+- `:DoubtSessionStop`
+- `:DoubtSessionDelete [name]`
+- `:DoubtSessionRename [name] [new_name]`
+
+Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`,
+and `:DoubtClaim <kind>` act on the current line. With a visual or Ex range,
+they use that range instead.
+
+Built-in export templates:
+
+- `raw`
+- `review`
+- `multi_agent`
+
+===============================================================================
+KEYMAPS                                                        *doubt-keymaps*
+
+Default mappings:
+
+- `<leader>Dq` question the current line or selection
+- `<leader>Dc` flag concern on the current line or selection
+- `<leader>Dr` reject the current line or selection
+- `<leader>Dp` toggle the panel
+- `<leader>De` copy the active session handoff
+- `<leader>DE` pick an export template, then copy handoff
+- `<leader>Db` clear all doubt claims for the current buffer
+- `<leader>Dd` delete claim nearest to the cursor
+- `<leader>Dm` modify claim note nearest to the cursor
+- `<leader>Dk` modify claim kind nearest to the cursor
+- `<leader>Dt` toggle expanded claim note nearest to the cursor
+- `<leader>Dn` start a new session
+- `<leader>Ds` resume a saved session
+- `<leader>Dx` stop the active session
+- `<leader>Df` refresh decorations and panel state
+
+Set `keymaps = false` to disable all defaults.
+
+===============================================================================
+CONFIGURATION                                            *doubt-configuration*
+
+Call `require("doubt").setup({...})` to override defaults.
+
+Main sections:
+
+- `export`
+- `input`
+- `claim_kinds`
+- `inline_notes`
+- `keymaps`
+- `panel`
+- `state_path`
+- `signs`
+
+See the README for the full default configuration block.
+
+===============================================================================
+HEALTHCHECK                                                *doubt-healthcheck*
+
+Run `:DoubtHealthcheck` to inspect:
+
+- dependency availability
+- command registration
+- config merge behavior
+- persisted session state shape
+
+vim:tw=78:ts=8:noet:ft=help
