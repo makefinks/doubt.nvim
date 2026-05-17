@@ -109,6 +109,7 @@ local DEFAULTS = {
 		edit_kind = "<leader>Dk",
 		edit_note = "<leader>Dm",
 		toggle_claim = "<leader>Dt",
+		toggle_notes = "<leader>Di",
 		export = "<leader>De",
 		clear_buffer = "<leader>Db",
 		panel = "<leader>Dp",

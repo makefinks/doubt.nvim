@@ -8,6 +8,7 @@ t.assert_eq(vim.fn.exists(":DoubtClaimDelete"), 2, "plugin bootstrap should regi
 t.assert_eq(vim.fn.exists(":DoubtClaimKind"), 2, "plugin bootstrap should register claim kind edit commands")
 t.assert_eq(vim.fn.exists(":DoubtClaimNote"), 2, "plugin bootstrap should register claim note edit commands")
 t.assert_eq(vim.fn.exists(":DoubtClaimToggle"), 2, "plugin bootstrap should register claim expansion toggle commands")
+t.assert_eq(vim.fn.exists(":DoubtNotesToggle"), 2, "plugin bootstrap should register claim notes visibility toggle command")
 t.assert_eq(vim.fn.exists(":DoubtHealthcheck"), 2, "plugin bootstrap should register healthcheck command")
 
 local export_map = vim.fn.maparg("<leader>De", "n", false, true)
@@ -27,6 +28,9 @@ t.assert_eq(edit_note_map.desc, "Change doubt claim note nearest to cursor", "pl
 
 local toggle_claim_map = vim.fn.maparg("<leader>Dt", "n", false, true)
 t.assert_eq(toggle_claim_map.desc, "Toggle doubt claim note nearest to cursor", "plugin bootstrap should install the nearest-claim toggle keymap")
+
+local toggle_notes_map = vim.fn.maparg("<leader>Di", "n", false, true)
+t.assert_eq(toggle_notes_map.desc, "Toggle doubt claim text descriptions", "plugin bootstrap should install the claim notes visibility keymap")
 
 local clear_buffer_map = vim.fn.maparg("<leader>Db", "n", false, true)
 t.assert_eq(clear_buffer_map.desc, "Clear doubt state for current buffer", "plugin bootstrap should keep a clear-buffer keymap")
@@ -50,5 +54,6 @@ t.assert_eq(vim.fn.maparg("<leader>Dd", "n"), "", "re-running setup should remov
 t.assert_eq(vim.fn.maparg("<leader>Dk", "n"), "", "re-running setup should remove the edit-kind keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dm", "n"), "", "re-running setup should remove the edit-note keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dt", "n"), "", "re-running setup should remove the toggle keymap when disabled")
+t.assert_eq(vim.fn.maparg("<leader>Di", "n"), "", "re-running setup should remove the notes visibility keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Db", "n"), "", "re-running setup should remove the clear-buffer keymap when disabled")
 t.assert_eq(vim.fn.getcompletion("DoubtExport ", "cmdline"), { "agent", "multi_agent", "raw", "review" }, "re-running setup should refresh command completion")

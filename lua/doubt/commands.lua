@@ -121,6 +121,10 @@ function M.register(api)
 		api.toggle_nearest_claim()
 	end, { desc = "Toggle the nearest claim note" })
 
+	replace_command("DoubtNotesToggle", function()
+		api.toggle_inline_notes()
+	end, { desc = "Toggle doubt claim text descriptions" })
+
 	replace_command("DoubtClearBuffer", function()
 		api.clear_buffer()
 	end, { desc = "Clear doubt state for the current buffer" })

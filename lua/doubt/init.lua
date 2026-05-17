@@ -384,6 +384,17 @@ function M.toggle_nearest_claim(opts)
 	ctx.refresh_ui(target.bufnr)
 end
 
+function M.toggle_inline_notes()
+	local layout = ctx.toggle_inline_notes()
+	if layout == "inline" then
+		clear_expanded_claim()
+	end
+
+	ctx.refresh_ui()
+	ctx.notify(layout == "block" and "Doubt claim notes shown as blocks" or "Doubt claim notes shown inline", vim.log.levels.INFO)
+	return layout
+end
+
 function M.delete_file(opts)
 	opts = opts or {}
 

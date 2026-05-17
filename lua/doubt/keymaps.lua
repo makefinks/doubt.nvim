@@ -12,6 +12,7 @@ local DEFAULT_DESC = {
 	edit_kind = "Change doubt claim kind nearest to cursor",
 	edit_note = "Change doubt claim note nearest to cursor",
 	toggle_claim = "Toggle doubt claim note nearest to cursor",
+	toggle_notes = "Toggle doubt claim text descriptions",
 	clear_buffer = "Clear doubt state for current buffer",
 	panel = "Toggle doubt panel",
 	session_new = "Start a new doubt session",
@@ -91,6 +92,12 @@ function M.register(api, opts)
 		set_keymap("toggle_claim", "n", opts.toggle_claim, function()
 			api.toggle_nearest_claim()
 		end, DEFAULT_DESC.toggle_claim)
+	end
+
+	if opts.toggle_notes then
+		set_keymap("toggle_notes", "n", opts.toggle_notes, function()
+			api.toggle_inline_notes()
+		end, DEFAULT_DESC.toggle_notes)
 	end
 
 	local export_picker = opts.export_picker

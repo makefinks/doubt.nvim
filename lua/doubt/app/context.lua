@@ -11,6 +11,7 @@ function M.new(deps)
 		api = nil,
 		expanded_claim = nil,
 		focused_claim = nil,
+		inline_notes_layout_name = "block",
 		live_edit_timers = {},
 	}
 
@@ -95,6 +96,15 @@ function M.new(deps)
 			and ctx.expanded_claim.path == path
 			and claim ~= nil
 			and ctx.expanded_claim.id == claim.id
+	end
+
+	function ctx.inline_notes_layout()
+		return ctx.inline_notes_layout_name
+	end
+
+	function ctx.toggle_inline_notes()
+		ctx.inline_notes_layout_name = ctx.inline_notes_layout_name == "block" and "inline" or "block"
+		return ctx.inline_notes_layout_name
 	end
 
 	function ctx.focus_mode(path, claim)

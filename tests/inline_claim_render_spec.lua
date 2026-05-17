@@ -84,6 +84,20 @@ local function mark_by_sign_text(marks, sign_text)
 	return nil
 end
 
+local function any_mark_by_sign_text(marks, sign_text)
+	local fallback = nil
+	for _, mark in ipairs(marks) do
+		local details = mark[4] or {}
+		if vim.trim(details.sign_text or "") == sign_text then
+			if details.virt_lines or details.virt_text then
+				return details
+			end
+			fallback = fallback or details
+		end
+	end
+	return fallback
+end
+
 local function mark_with_end_row(marks)
 	for _, mark in ipairs(marks) do
 		local details = mark[4] or {}
@@ -149,6 +163,28 @@ question_mark = mark_by_sign_text(marks, "?")
 
 t.assert_eq(question_mark.virt_lines_above, true, "toggling the same claim again should collapse it")
 t.assert_match(virt_line_text(question_mark.virt_lines[2]), "%.%.%. 19 more", "collapsed claim should return to the compact truncation text")
+
+doubt.toggle_inline_notes()
+
+marks = current_marks()
+question_mark = any_mark_by_sign_text(marks, "?")
+reject_mark = any_mark_by_sign_text(marks, "!")
+
+t.assert_eq(question_mark ~= nil, true, "inline notes should keep the question sign")
+t.assert_eq(reject_mark ~= nil, true, "inline notes should keep the reject sign")
+t.assert_eq(question_mark.virt_lines, nil, "inline notes should remove question virtual lines")
+t.assert_eq(reject_mark.virt_lines, nil, "inline notes should remove reject virtual lines")
+t.assert_match(virt_line_text(question_mark.virt_text), "%.%.%. 19 more", "inline notes should keep compact question text")
+t.assert_match(virt_line_text(reject_mark.virt_text), "%.%.%. 21 more", "inline notes should keep compact reject text")
+
+doubt.toggle_inline_notes()
+
+marks = current_marks()
+question_mark = mark_by_sign_text(marks, "?")
+reject_mark = mark_by_sign_text(marks, "!")
+
+t.assert_eq(question_mark ~= nil, true, "shown inline notes should restore question virtual lines")
+t.assert_eq(reject_mark ~= nil, true, "shown inline notes should restore reject virtual lines")
 
 vim.cmd.edit(deleted_line_file)
 doubt.start_session({ name = "deleted-line-refresh", quiet = true })

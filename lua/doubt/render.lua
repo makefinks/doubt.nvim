@@ -135,6 +135,12 @@ function M.render_claim(ctx, bufnr, claim)
 		or { compact_inline_text(inline_text, config.inline_notes.max_width) }
 	local right_padding = math.max(config.inline_notes.padding_right or 0, 0)
 	local prefix = config.inline_notes.prefix or ""
+	local inline_notes_layout = ctx.inline_notes_layout and ctx.inline_notes_layout() or "block"
+	local render_block_notes = config.inline_notes.enabled and inline_notes_layout == "block"
+	local inline_note = config.inline_notes.enabled
+		and inline_notes_layout == "inline"
+		and compact_inline_text(inline_text, config.inline_notes.max_width)
+		or nil
 	local label_width = display_width(inline_label)
 	local content_width = 0
 	for _, body_line in ipairs(body_lines) do
@@ -144,7 +150,7 @@ function M.render_claim(ctx, bufnr, claim)
 
 	-- Render inline notes as a rectangular virtual block so wrapped rows align
 	-- with the label and background bar instead of drifting by content width.
-	local virt_lines = config.inline_notes.enabled and {
+	local virt_lines = render_block_notes and {
 		{
 			{
 				prefix,
@@ -237,8 +243,14 @@ function M.render_claim(ctx, bufnr, claim)
 		sign_text = meta.sign or config.signs[claim.kind] or config.signs.file,
 		sign_hl_group = claim_hl,
 		priority = 130,
+		virt_text = inline_note and {
+			{ " ", "Normal" },
+			{ inline_label, inline_label_hl },
+			{ " " .. inline_note, inline_text_hl },
+		} or nil,
+		virt_text_pos = inline_note and "eol" or nil,
 		virt_lines = virt_lines,
-		virt_lines_above = config.inline_notes.enabled,
+		virt_lines_above = render_block_notes,
 	})
 end
 
