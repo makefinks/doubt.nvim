@@ -20,6 +20,8 @@ function M.capture_window_options(winid)
 		foldcolumn = vim.wo[winid].foldcolumn,
 		cursorline = vim.wo[winid].cursorline,
 		winfixwidth = vim.wo[winid].winfixwidth,
+		conceallevel = vim.wo[winid].conceallevel,
+		concealcursor = vim.wo[winid].concealcursor,
 	}
 end
 

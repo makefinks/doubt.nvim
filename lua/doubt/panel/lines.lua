@@ -2,6 +2,7 @@ local claims = require("doubt.claims")
 
 local M = {}
 local CLAIM_KIND_CELL_WIDTH = 8
+local MARKDOWN_MARKERS = { "`", "**", "__", "~~", "*", "_" }
 
 local function count_claims(files)
 	local total = 0
@@ -87,6 +88,46 @@ local function split_long_word(word, width)
 	return pieces
 end
 
+local function markdown_span_at(text, index)
+	for _, marker in ipairs(MARKDOWN_MARKERS) do
+		if text:sub(index, index + #marker - 1) == marker then
+			local close_start = text:find(marker, index + #marker, true)
+			if close_start and close_start > index + #marker then
+				return text:sub(index, close_start + #marker - 1)
+			end
+		end
+	end
+
+	return nil
+end
+
+local function wrap_tokens(text, width)
+	local tokens = {}
+	local index = 1
+
+	while index <= #text do
+		local char = text:sub(index, index)
+		if char:match("%s") then
+			index = index + 1
+		else
+			local markdown_span = markdown_span_at(text, index)
+			if markdown_span then
+				table.insert(tokens, markdown_span)
+				index = index + #markdown_span
+			else
+				local next_space = text:find("%s", index)
+				local word = text:sub(index, next_space and (next_space - 1) or #text)
+				for _, piece in ipairs(split_long_word(word, width)) do
+					table.insert(tokens, piece)
+				end
+				index = next_space or (#text + 1)
+			end
+		end
+	end
+
+	return tokens
+end
+
 local function wrap_text(text, width)
 	width = math.max(width or 1, 1)
 	text = vim.trim((text or ""):gsub("[\r\n]+", " "))
@@ -94,12 +135,7 @@ local function wrap_text(text, width)
 		return { "" }
 	end
 
-	local words = {}
-	for word in text:gmatch("%S+") do
-		for _, piece in ipairs(split_long_word(word, width)) do
-			table.insert(words, piece)
-		end
-	end
+	local words = wrap_tokens(text, width)
 
 	local lines = {}
 	local current = ""
@@ -227,6 +263,7 @@ local function build_claim_lines(path, claim, panel_width)
 		kind = "claim",
 		id = claim.id,
 		active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
+		active_border_hl = claim.freshness == "stale" and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
 		path = path,
 		line = claim.start_line + 1,
 		col = claim.start_col or 0,
@@ -251,6 +288,8 @@ local function build_claim_lines(path, claim, panel_width)
 			kind = "claim",
 			id = claim.id,
 			active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
+			active_border_hl = claim.freshness == "stale" and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
+			markdown = true,
 			path = path,
 			line = claim.start_line + 1,
 			col = claim.start_col or 0,

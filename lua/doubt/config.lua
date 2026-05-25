@@ -218,6 +218,8 @@ function M.set_highlights()
 		local stale_claim_group = meta.stale_hl or ("DoubtStale" .. meta.command)
 		local dim_claim_group = meta.dim_hl or ("DoubtDim" .. meta.command)
 		local dim_stale_claim_group = meta.dim_stale_hl or ("DoubtDimStale" .. meta.command)
+		local active_border_group = meta.active_border_hl or ("DoubtPanelActive" .. meta.command .. "Border")
+		local stale_active_border_group = meta.stale_active_border_hl or ("DoubtPanelActiveStale" .. meta.command .. "Border")
 		local inline_label_group = meta.inline_label_hl or ("DoubtInline" .. meta.command .. "Label")
 		local inline_text_group = meta.inline_text_hl or ("DoubtInline" .. meta.command .. "Text")
 		local dim_inline_label_group = meta.dim_inline_label_hl or ("DoubtInlineDim" .. meta.command .. "Label")
@@ -226,6 +228,8 @@ function M.set_highlights()
 		meta.stale_hl = stale_claim_group
 		meta.dim_hl = dim_claim_group
 		meta.dim_stale_hl = dim_stale_claim_group
+		meta.active_border_hl = active_border_group
+		meta.stale_active_border_hl = stale_active_border_group
 		meta.inline_label_hl = inline_label_group
 		meta.inline_text_hl = inline_text_group
 		meta.dim_inline_label_hl = dim_inline_label_group
@@ -235,6 +239,8 @@ function M.set_highlights()
 			vim.api.nvim_set_hl(0, stale_claim_group, stale_mark_style(meta.styles.mark))
 			vim.api.nvim_set_hl(0, dim_claim_group, dim_style(meta.styles.mark))
 			vim.api.nvim_set_hl(0, dim_stale_claim_group, dim_style(stale_mark_style(meta.styles.mark)))
+			vim.api.nvim_set_hl(0, active_border_group, { fg = meta.styles.mark.fg, bold = true })
+			vim.api.nvim_set_hl(0, stale_active_border_group, { fg = stale_mark_style(meta.styles.mark).fg, bold = true })
 		end
 		if meta.styles and meta.styles.inline_label then
 			vim.api.nvim_set_hl(0, inline_label_group, meta.styles.inline_label)
@@ -255,6 +261,10 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtPanelMuted", { fg = "#7F8794" })
 	vim.api.nvim_set_hl(0, "DoubtPanelStale", { fg = "#D4A373", italic = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelActiveClaim", { bg = "#2A3441" })
+	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownCode", { fg = "#FDE68A", bg = "#1F2937" })
+	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownBold", { fg = "#F8E7A1", bold = true })
+	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownItalic", { fg = "#A8B3C2", italic = true })
+	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownStrike", { strikethrough = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpNormal", { fg = "#D5DEE8" })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpTitle", { fg = "#F8E7A1", bold = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpSection", { fg = "#8EC5FC", bold = true })

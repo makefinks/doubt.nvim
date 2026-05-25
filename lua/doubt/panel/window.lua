@@ -62,10 +62,12 @@ function M.open(ctx, panel_api)
 	vim.api.nvim_win_set_width(panel_state.winid, config.panel.width)
 	vim.wo[panel_state.winid].number = false
 	vim.wo[panel_state.winid].relativenumber = false
-	vim.wo[panel_state.winid].signcolumn = "no"
+	vim.wo[panel_state.winid].signcolumn = "yes"
 	vim.wo[panel_state.winid].foldcolumn = "0"
 	vim.wo[panel_state.winid].cursorline = false
 	vim.wo[panel_state.winid].winfixwidth = true
+	vim.wo[panel_state.winid].conceallevel = 2
+	vim.wo[panel_state.winid].concealcursor = "nvic"
 
 	vim.bo[panel_state.bufnr].buftype = "nofile"
 	vim.bo[panel_state.bufnr].bufhidden = "wipe"
