@@ -1,5 +1,6 @@
 -- Public entrypoint that wires together config, state, rendering, and commands.
 local claims = require("doubt.claims")
+local agent_instructions = require("doubt.agent_instructions")
 local context = require("doubt.app.context")
 local session_ui = require("doubt.app.session_ui")
 local commands = require("doubt.commands")
@@ -635,6 +636,14 @@ function M.copy_filtered_export()
 	end)
 end
 
+function M.copy_agent_instructions()
+	local text = agent_instructions.render(config.get())
+	local register = ((config.get().export or {}).register or "+")
+	vim.fn.setreg(register, text)
+	ctx.notify(string.format("Copied doubt agent instructions to %s", register))
+	return text
+end
+
 function M.list_export_templates()
 	return export.list_template_names(config.get().export)
 end
@@ -761,6 +770,102 @@ function M.resume_session(opts)
 	end)
 end
 
+function M.start_workspace_session(opts)
+	opts = opts or {}
+
+	local function activate(session_name)
+		local already_exists = state.workspace_session_state(session_name) ~= nil
+		if not state.set_active_workspace_session(session_name) then
+			ctx.notify("Workspace session name cannot contain path separators", vim.log.levels.WARN)
+			return
+		end
+		refresh_active_session_claims()
+		clear_expanded_claim()
+		clear_focused_claim()
+		state.save(config.get(), ctx.notify)
+		ctx.refresh_ui()
+		if not opts.quiet then
+			local verb = already_exists and "Resumed" or "Started"
+			ctx.notify(string.format("%s doubt workspace session: %s", verb, session_name))
+		end
+	end
+
+	if opts.name then
+		local session_name = state.normalize_session_name(opts.name)
+		if not session_name then
+			ctx.notify("Session name cannot be empty", vim.log.levels.WARN)
+			return
+		end
+
+		activate(session_name)
+		return
+	end
+
+	prompt_session_name({
+		prompt = "Start workspace session: ",
+		title = "new doubt workspace session",
+	}, function(session_name, cancelled)
+		if cancelled then
+			return
+		end
+
+		activate(session_name)
+	end)
+end
+
+function M.resume_workspace_session(opts)
+	opts = opts or {}
+
+	local function activate(session_name)
+		if not state.set_active_workspace_session(session_name) then
+			ctx.notify("Unable to resume doubt workspace session", vim.log.levels.WARN)
+			return
+		end
+		refresh_active_session_claims()
+		clear_expanded_claim()
+		clear_focused_claim()
+		state.save(config.get(), ctx.notify)
+		ctx.refresh_ui()
+		if not opts.quiet then
+			ctx.notify(string.format("Resumed doubt workspace session: %s", session_name))
+		end
+	end
+
+	if opts.name then
+		local session_name = state.normalize_session_name(opts.name)
+		if not session_name or not state.workspace_session_state(session_name) then
+			ctx.notify("Unknown doubt workspace session", vim.log.levels.WARN)
+			return
+		end
+
+		activate(session_name)
+		return
+	end
+
+	local session_names = state.list_workspace_sessions()
+	if vim.tbl_isempty(session_names) then
+		ctx.notify("No workspace doubt sessions yet", vim.log.levels.INFO)
+		return
+	end
+
+	vim.ui.select(session_names, {
+		prompt = "Resume doubt workspace session",
+		format_item = function(item)
+			if item == state.active_session_name() and state.active_session_source() == "workspace" then
+				return item .. " (active)"
+			end
+
+			return item
+		end,
+	}, function(choice)
+		if not choice then
+			return
+		end
+
+		activate(choice)
+	end)
+end
+
 function M.stop_session()
 	local session_name = state.active_session_name()
 	if not session_name then
@@ -774,6 +879,55 @@ function M.stop_session()
 	state.save(config.get(), ctx.notify)
 	ctx.refresh_ui()
 	ctx.notify(string.format("Stopped doubt session: %s", session_name))
+end
+
+function M.delete_workspace_session(opts)
+	opts = opts or {}
+
+	local function destroy(session_name)
+		local deleting_active = session_name == state.active_session_name() and state.active_session_source() == "workspace"
+		if not confirm(string.format("Delete doubt workspace session '%s'?", session_name)) then
+			return
+		end
+
+		if not state.delete_workspace_session(session_name) then
+			ctx.notify("Unknown doubt workspace session", vim.log.levels.WARN)
+			return
+		end
+
+		if deleting_active then
+			clear_expanded_claim()
+			clear_focused_claim()
+		end
+
+		ctx.refresh_ui()
+		ctx.notify(string.format("Deleted doubt workspace session: %s", session_name))
+	end
+
+	if opts.name then
+		local session_name = state.normalize_session_name(opts.name)
+		if not session_name or not state.workspace_session_state(session_name) then
+			ctx.notify("Unknown doubt workspace session", vim.log.levels.WARN)
+			return
+		end
+
+		destroy(session_name)
+		return
+	end
+
+	local session_names = state.list_workspace_sessions()
+	if vim.tbl_isempty(session_names) then
+		ctx.notify("No workspace doubt sessions yet", vim.log.levels.INFO)
+		return
+	end
+
+	vim.ui.select(session_names, {
+		prompt = "Delete doubt workspace session",
+	}, function(choice)
+		if choice then
+			destroy(choice)
+		end
+	end)
 end
 
 function M.delete_session(opts)
@@ -898,6 +1052,78 @@ function M.rename_session(opts)
 		end
 
 		if state.get().sessions[new_name] then
+			ctx.notify("Session name already exists", vim.log.levels.WARN)
+			return
+		end
+
+		rename(old_name, new_name)
+	end)
+
+	return true
+end
+
+function M.rename_workspace_session(opts)
+	opts = opts or {}
+
+	local function rename(old_name, new_name)
+		if not state.rename_workspace_session(old_name, new_name) then
+			ctx.notify("Unable to rename doubt workspace session", vim.log.levels.WARN)
+			return false
+		end
+
+		clear_expanded_claim()
+		clear_focused_claim()
+		ctx.refresh_ui()
+		ctx.notify(string.format("Renamed doubt workspace session: %s → %s", old_name, new_name))
+		return true
+	end
+
+	local old_name = state.normalize_session_name(opts.name)
+	if not old_name then
+		ctx.notify("Session name cannot be empty", vim.log.levels.WARN)
+		return false
+	end
+
+	if not state.workspace_session_state(old_name) then
+		ctx.notify("Unknown doubt workspace session", vim.log.levels.WARN)
+		return false
+	end
+
+	local provided_new_name = state.normalize_session_name(opts.new_name)
+	if opts.new_name ~= nil then
+		if not provided_new_name then
+			ctx.notify("Session name cannot be empty", vim.log.levels.WARN)
+			return false
+		end
+
+		if provided_new_name == old_name then
+			ctx.notify("Session name is unchanged", vim.log.levels.WARN)
+			return false
+		end
+
+		if state.workspace_session_state(provided_new_name) then
+			ctx.notify("Session name already exists", vim.log.levels.WARN)
+			return false
+		end
+
+		return rename(old_name, provided_new_name)
+	end
+
+	prompt_session_name({
+		default = old_name,
+		prompt = "Rename workspace session to: ",
+		title = "rename doubt workspace session",
+	}, function(new_name, cancelled)
+		if cancelled then
+			return
+		end
+
+		if new_name == old_name then
+			ctx.notify("Session name is unchanged", vim.log.levels.WARN)
+			return
+		end
+
+		if state.workspace_session_state(new_name) then
 			ctx.notify("Session name already exists", vim.log.levels.WARN)
 			return
 		end

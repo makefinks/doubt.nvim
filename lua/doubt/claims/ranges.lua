@@ -42,7 +42,9 @@ function M.normalize_position_range(start_line, start_col, end_line, end_col)
 	start_line = math.max(start_line or 0, 0)
 	end_line = math.max(end_line or start_line, 0)
 	start_col = math.max(start_col or 0, 0)
-	end_col = end_col == nil and nil or math.max(end_col, 0)
+	if end_col ~= nil then
+		end_col = math.max(end_col, 0)
+	end
 
 	if end_line < start_line then
 		start_line, end_line = end_line, start_line

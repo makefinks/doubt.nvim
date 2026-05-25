@@ -3,12 +3,24 @@ local classify = require("doubt.sessions.classify")
 local normalize = require("doubt.sessions.normalize")
 local persistence = require("doubt.sessions.persistence")
 local store = require("doubt.sessions.store")
+local workspace_sessions = require("doubt.workspace_sessions")
 
 local M = {}
+local active_source = nil
+
+local function local_active_session_name()
+	return store.workspace_state().active_session
+end
+
+local function active_is_workspace()
+	return active_source == "workspace" and workspace_sessions.active_session_name() ~= nil
+end
 
 function M.set_workspace(workspace_key)
 	store.set_current_workspace(workspace_key)
 	store.ensure_workspace_state(store.get_current_workspace())
+	workspace_sessions.set_workspace(workspace_key)
+	active_source = local_active_session_name() and "local" or nil
 end
 
 function M.get()
@@ -16,7 +28,23 @@ function M.get()
 end
 
 function M.active_session_name()
-	return store.workspace_state().active_session
+	if active_is_workspace() then
+		return workspace_sessions.active_session_name()
+	end
+
+	if active_source == "local" or (active_source == nil and local_active_session_name()) then
+		return local_active_session_name()
+	end
+
+	return nil
+end
+
+function M.active_session_source()
+	if M.active_session_name() then
+		return active_source or "local"
+	end
+
+	return nil
 end
 
 function M.has_active_session()
@@ -28,6 +56,10 @@ M.normalize_file_state = normalize.normalize_file_state
 M.normalize_session_state = normalize.normalize_session_state
 
 function M.current_files()
+	if active_is_workspace() then
+		return workspace_sessions.current_files()
+	end
+
 	local session_name = M.active_session_name()
 	if not session_name then
 		return {}
@@ -41,6 +73,14 @@ function M.list_sessions()
 	local session_names = vim.tbl_keys(store.workspace_state().sessions)
 	table.sort(session_names)
 	return session_names
+end
+
+function M.list_workspace_sessions()
+	return workspace_sessions.list_sessions()
+end
+
+function M.workspace_session_state(name)
+	return workspace_sessions.get_session(name)
 end
 
 function M.ensure_session(name)
@@ -67,11 +107,32 @@ function M.set_active_session(name)
 
 	M.ensure_session(name)
 	store.workspace_state().active_session = name
+	workspace_sessions.stop_session()
+	active_source = "local"
 	return name
 end
 
+function M.set_active_workspace_session(name)
+	name = M.normalize_session_name(name)
+	if not name then
+		return nil
+	end
+
+	local active = workspace_sessions.set_active_session(name)
+	if active then
+		store.workspace_state().active_session = nil
+		active_source = "workspace"
+	end
+	return active
+end
+
 function M.stop_session()
-	store.workspace_state().active_session = nil
+	if active_is_workspace() then
+		workspace_sessions.stop_session()
+	else
+		store.workspace_state().active_session = nil
+	end
+	active_source = nil
 end
 
 function M.delete_session(name)
@@ -86,6 +147,17 @@ function M.delete_session(name)
 		current.active_session = nil
 	end
 
+	return true
+end
+
+function M.delete_workspace_session(name)
+	local deleting_active = active_is_workspace() and workspace_sessions.active_session_name() == M.normalize_session_name(name)
+	if not workspace_sessions.delete_session(name) then
+		return false
+	end
+	if deleting_active then
+		active_source = nil
+	end
 	return true
 end
 
@@ -111,7 +183,15 @@ function M.rename_session(old_name, new_name)
 	return true
 end
 
+function M.rename_workspace_session(old_name, new_name)
+	return workspace_sessions.rename_session(old_name, new_name)
+end
+
 function M.delete_claim(path, claim_id)
+	if active_is_workspace() then
+		return workspace_sessions.delete_claim(path, claim_id)
+	end
+
 	if type(path) ~= "string" or type(claim_id) ~= "string" then
 		return false
 	end
@@ -142,6 +222,10 @@ function M.delete_claim(path, claim_id)
 end
 
 function M.find_claim(path, claim_id)
+	if active_is_workspace() then
+		return workspace_sessions.find_claim(path, claim_id)
+	end
+
 	if type(path) ~= "string" or type(claim_id) ~= "string" then
 		return nil
 	end
@@ -163,6 +247,10 @@ function M.find_claim(path, claim_id)
 end
 
 function M.update_claim(path, claim_id, updates)
+	if active_is_workspace() then
+		return workspace_sessions.update_claim(path, claim_id, updates)
+	end
+
 	local claim = M.find_claim(path, claim_id)
 	if not claim or type(updates) ~= "table" then
 		return false
@@ -195,6 +283,20 @@ function M.classify_file_claims(path, opts)
 	end
 
 	opts = opts or {}
+	if active_is_workspace() then
+		local file_state = workspace_sessions.current_files()[path]
+		if not file_state then
+			return { changed = false, claim_count = 0 }
+		end
+
+		local content = type(opts.content) == "string" and opts.content or persistence.read_file_content(path)
+		local changed = classify.classify_file_state(file_state, content)
+		return {
+			changed = changed,
+			claim_count = #(file_state.claims or {}),
+		}
+	end
+
 	local session_name = M.active_session_name()
 	if not session_name then
 		return { changed = false, claim_count = 0 }
@@ -223,6 +325,21 @@ function M.classify_all_claims()
 end
 
 function M.classify_current_session_claims()
+	if active_is_workspace() then
+		local changed_file_count = 0
+		local claim_count = 0
+		for path, file_state in pairs(workspace_sessions.current_files()) do
+			claim_count = claim_count + #((file_state or {}).claims or {})
+			if classify.classify_file_state(file_state, persistence.read_file_content(path)) then
+				changed_file_count = changed_file_count + 1
+			end
+		end
+		return {
+			changed_file_count = changed_file_count,
+			claim_count = claim_count,
+		}
+	end
+
 	local session_name = M.active_session_name()
 	if not session_name then
 		return {
@@ -249,6 +366,10 @@ function M.classify_current_session_claims()
 end
 
 function M.delete_file(path)
+	if active_is_workspace() then
+		return workspace_sessions.delete_file(path)
+	end
+
 	if type(path) ~= "string" then
 		return false
 	end
@@ -268,6 +389,10 @@ function M.delete_file(path)
 end
 
 function M.ensure_file_entry(path)
+	if active_is_workspace() then
+		return workspace_sessions.ensure_file_entry(path)
+	end
+
 	local session_name = M.active_session_name()
 	if not session_name then
 		return nil
@@ -285,9 +410,18 @@ end
 
 function M.load(config, normalize_path, notify, workspace_key)
 	persistence.load(config, normalize_path, notify, workspace_key, M.classify_all_claims)
+	workspace_sessions.set_workspace(workspace_key)
+	active_source = local_active_session_name() and "local" or nil
 end
 
 function M.save(config, notify)
+	if active_is_workspace() then
+		if not workspace_sessions.save_current_session() then
+			notify("Failed to save doubt workspace session", vim.log.levels.ERROR)
+		end
+		return
+	end
+
 	persistence.save(config, notify)
 end
 

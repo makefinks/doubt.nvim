@@ -162,6 +162,13 @@ function M.register(api)
 		nargs = 0,
 	})
 
+	replace_command("DoubtAgentInstructionsCopy", function()
+		api.copy_agent_instructions()
+	end, {
+		desc = "Copy doubt workspace review instructions for agents",
+		nargs = 0,
+	})
+
 	replace_command("DoubtState", function()
 		api.open_state_file()
 	end, {
@@ -202,6 +209,38 @@ function M.register(api)
 		})
 	end, {
 		desc = "Rename a saved doubt session",
+		nargs = "*",
+	})
+
+	replace_command("DoubtWorkspaceSessionNew", function(command_opts)
+		api.start_workspace_session({ name = command_note(command_opts.args) })
+	end, {
+		desc = "Start or switch to a workspace doubt session",
+		nargs = "?",
+	})
+
+	replace_command("DoubtWorkspaceSessionResume", function(command_opts)
+		api.resume_workspace_session({ name = command_note(command_opts.args) })
+	end, {
+		desc = "Resume a workspace doubt session",
+		nargs = "?",
+	})
+
+	replace_command("DoubtWorkspaceSessionDelete", function(command_opts)
+		api.delete_workspace_session({ name = command_note(command_opts.args) })
+	end, {
+		desc = "Delete a workspace doubt session",
+		nargs = "?",
+	})
+
+	replace_command("DoubtWorkspaceSessionRename", function(command_opts)
+		local args = vim.split(vim.trim(command_opts.args or ""), "%s+", { plain = false, trimempty = true })
+		api.rename_workspace_session({
+			name = args[1],
+			new_name = args[2],
+		})
+	end, {
+		desc = "Rename a workspace doubt session",
 		nargs = "*",
 	})
 end

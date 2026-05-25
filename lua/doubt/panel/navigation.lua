@@ -13,7 +13,11 @@ function M.activate_line(ctx)
 	end
 
 	if item.session_name then
-		ctx.api.resume_session({ name = item.session_name, quiet = true })
+		if item.source == "workspace" then
+			ctx.api.resume_workspace_session({ name = item.session_name, quiet = true })
+		else
+			ctx.api.resume_session({ name = item.session_name, quiet = true })
+		end
 		return
 	end
 
@@ -120,7 +124,11 @@ function M.delete_line(ctx)
 	end
 
 	if item.kind == "session" and item.session_name and not item.active then
-		ctx.api.delete_session({ name = item.session_name })
+		if item.source == "workspace" then
+			ctx.api.delete_workspace_session({ name = item.session_name })
+		else
+			ctx.api.delete_session({ name = item.session_name })
+		end
 	end
 end
 

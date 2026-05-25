@@ -168,6 +168,16 @@ local function add_session_summary(lines, session_name, files, active)
 	table.insert(lines, summary)
 end
 
+local function add_source_summary(lines, source)
+	local source_line = with_defaults({
+		kind = "source",
+		text = string.format("Source   %s", source or "local"),
+	})
+	add_highlight(source_line, 0, 6, "DoubtPanelMuted")
+	add_highlight(source_line, 9, #source_line.text, source == "workspace" and "DoubtPanelSession" or "DoubtPanelFile")
+	table.insert(lines, source_line)
+end
+
 local function build_file_line(config, path, file_state)
 	local relative = vim.fn.fnamemodify(path, ":.")
 	local count = #(file_state.claims or {})
@@ -290,7 +300,7 @@ local function build_claim_lines(path, claim, panel_width)
 	return items
 end
 
-local function build_saved_session_line(config, session_name, session_state)
+local function build_saved_session_line(config, session_name, session_state, source)
 	local files = (session_state or {}).files or {}
 	local file_count = vim.tbl_count(files)
 	local claim_count = count_claims(files)
@@ -308,6 +318,7 @@ local function build_saved_session_line(config, session_name, session_state)
 	local item = with_defaults({
 		kind = "session",
 		active = false,
+		source = source or "local",
 		session_name = session_name,
 		text = text,
 	})
@@ -340,6 +351,7 @@ function M.build_lines(ctx, panel_width)
 
 	if session_name then
 		add_session_summary(lines, session_name, files, true)
+		add_source_summary(lines, state.active_session_source and state.active_session_source() or "local")
 		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		local help_hint = with_defaults({ kind = "muted", text = "press ? for help" })
 		add_highlight(help_hint, 6, 7, "DoubtPanelKey")
@@ -385,14 +397,27 @@ function M.build_lines(ctx, panel_width)
 	table.insert(lines, with_defaults({ kind = "muted", text = "Claims are hidden until a session is active." }))
 
 	local session_names = state.list_sessions()
-	if vim.tbl_isempty(session_names) then
+	local workspace_session_names = state.list_workspace_sessions and state.list_workspace_sessions() or {}
+	if vim.tbl_isempty(session_names) and vim.tbl_isempty(workspace_session_names) then
 		table.insert(lines, with_defaults({ kind = "muted", text = "No saved sessions for this workspace yet." }))
 		return lines
 	end
 
-	table.insert(lines, with_defaults({ kind = "section", text = "Saved Sessions" }))
-	for _, name in ipairs(session_names) do
-		table.insert(lines, build_saved_session_line(config, name, state.get().sessions[name]))
+	if not vim.tbl_isempty(session_names) then
+		table.insert(lines, with_defaults({ kind = "section", text = "Local Sessions" }))
+		for _, name in ipairs(session_names) do
+			table.insert(lines, build_saved_session_line(config, name, state.get().sessions[name], "local"))
+		end
+	end
+
+	if not vim.tbl_isempty(workspace_session_names) then
+		if not vim.tbl_isempty(session_names) then
+			table.insert(lines, with_defaults({ kind = "muted", text = "" }))
+		end
+		table.insert(lines, with_defaults({ kind = "section", text = "Workspace Sessions" }))
+		for _, name in ipairs(workspace_session_names) do
+			table.insert(lines, build_saved_session_line(config, name, state.workspace_session_state(name), "workspace"))
+		end
 	end
 
 	return lines

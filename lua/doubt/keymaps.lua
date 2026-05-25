@@ -8,6 +8,7 @@ local registered_keymaps = {}
 local DEFAULT_DESC = {
 	export = "Copy doubt export for agent handoff",
 	export_picker = "Pick a doubt export template for agent handoff",
+	agent_instructions = "Copy doubt agent review instructions",
 	delete_claim = "Delete doubt claim nearest to cursor",
 	edit_kind = "Change doubt claim kind nearest to cursor",
 	edit_note = "Change doubt claim note nearest to cursor",
@@ -68,6 +69,12 @@ function M.register(api, opts)
 		set_keymap("export", "n", opts.export, function()
 			api.copy_export()
 		end, DEFAULT_DESC.export)
+	end
+
+	if opts.agent_instructions then
+		set_keymap("agent_instructions", "n", opts.agent_instructions, function()
+			api.copy_agent_instructions()
+		end, DEFAULT_DESC.agent_instructions)
 	end
 
 	if opts.delete_claim then

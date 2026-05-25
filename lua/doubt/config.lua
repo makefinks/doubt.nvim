@@ -101,6 +101,7 @@ local DEFAULTS = {
 		padding_right = 2,
 	},
 	keymaps = {
+		agent_instructions = "<leader>Da",
 		question = "<leader>Dq",
 		concern = "<leader>Dc",
 		reject = "<leader>Dr",
