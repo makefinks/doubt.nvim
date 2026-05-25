@@ -5,6 +5,8 @@
 `doubt.nvim` is a Neovim plugin for reviewing (AI-generated) code with a focus on inline comments and persistent sessions.
 It helps you mark questionable, risky, or incorrect parts of code directly in the buffer, so review findings stay visible and actionable.
 
+Agents can also write review findings in a format that `doubt.nvim` can read, so AI-generated reviews can be inspected, edited, refreshed, and exported from inside Neovim instead of living only in chat output.
+
 **Finished reviewing outputs?** `doubt.nvim` lets you export all your claims to a **structured XML format** together with configurable **prompt templates**
 that wrap your findings with (follow-up) instructions for coding assistants.
 
@@ -81,6 +83,7 @@ Main review actions:
 - `:DoubtExport [template]`
 - `:DoubtExportFilter`
 - `:DoubtExportXml`
+- `:DoubtAgentInstructionsCopy`
 - `:DoubtHealthcheck`
 - `:DoubtClearBuffer`
 - `:DoubtRefresh`
@@ -93,6 +96,13 @@ Session management:
 - `:DoubtSessionStop`
 - `:DoubtSessionDelete [name]`
 - `:DoubtSessionRename [name] [new_name]`
+
+Workspace session management:
+
+- `:DoubtWorkspaceSessionNew [name]`
+- `:DoubtWorkspaceSessionResume [name]`
+- `:DoubtWorkspaceSessionDelete [name]`
+- `:DoubtWorkspaceSessionRename [name] [new_name]`
 
 Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`, and `:DoubtClaim <kind>` operate on the current line. With a visual or Ex range, they use that range instead.
 If you omit `[note]`, an inline note popup asks for one.
@@ -111,6 +121,42 @@ Template names are exposed as command completion so custom handoff wrappers stay
 
 `:DoubtExportXml` opens the full active session as compact XML grouped by file into a scratch XML buffer when you want to inspect the raw export.
 
+`:DoubtAgentInstructionsCopy` copies instructions for agents that should write review findings directly into a repo-local workspace session.
+
+### Agent-written workspace sessions
+
+Workspace sessions are stored under `.doubt/sessions/<session-name>/` in the repository. They are intended for cases where an agent or external reviewer writes structured findings that you want to inspect in Neovim with the normal doubt panel, marks, stale/reanchored status, editing commands, and exports.
+
+The claim files mirror repo-relative source paths under `claims/` and append `.json`:
+
+```text
+.doubt/sessions/ai-review-findings/
+  session.json
+  claims/lua/doubt/init.lua.json
+```
+
+For a source file `lua/doubt/init.lua`, the per-file claim JSON contains the same repo-relative path:
+
+```json
+{
+  "schema_version": 1,
+  "file": "lua/doubt/init.lua",
+  "claims": [
+    {
+      "id": "ai-001",
+      "kind": "concern",
+      "start_line": 49,
+      "start_col": 1,
+      "end_line": 49,
+      "end_col": 20,
+      "note": "Explain the concrete issue and why it matters."
+    }
+  ]
+}
+```
+
+Use `:DoubtAgentInstructionsCopy` or `<leader>Da` to copy the exact instructions for an agent. Then open the result with `:DoubtWorkspaceSessionResume <session-name>`.
+
 ## Default Keymaps
 
 - `<leader>Dq` question the current line or selection
@@ -119,6 +165,7 @@ Template names are exposed as command completion so custom handoff wrappers stay
 - `<leader>Dp` toggle the panel
 - `<leader>De` copy the active session handoff (default: review template)
 - `<leader>DE` open template picker, then copy handoff
+- `<leader>Da` copy instructions for agent-written workspace review sessions
 - `<leader>Db` clear all doubt claims for the current buffer
 - `<leader>Dd` delete claim nearest to the cursor
 - `<leader>Dm` modify claim note nearest to the cursor
@@ -236,6 +283,7 @@ require("doubt").setup({
     padding_right = 2,
   },
   keymaps = {
+    agent_instructions = "<leader>Da",
     question = "<leader>Dq",
     concern = "<leader>Dc",
     reject = "<leader>Dr",
