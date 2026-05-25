@@ -74,17 +74,21 @@ local lines = panel.build_lines({
 
 local reanchored_line
 local reanchored_item
+local reanchored_note_line
 for _, item in ipairs(lines) do
 	if item.kind == "claim" and item.id == "reanchored-claim" then
-		reanchored_line = item.text
-		reanchored_item = item
-		break
+		if not reanchored_line then
+			reanchored_line = item.text
+			reanchored_item = item
+		elseif item.text:find("%[reanchored%] moved note") then
+			reanchored_note_line = item.text
+		end
 	end
 end
 
 t.assert_eq(reanchored_line ~= nil, true, "panel lines should include the reanchored claim")
-t.assert_match(reanchored_line, "%[reanchored%] moved note", "panel text should expose the same reanchored marker")
-t.assert_match(reanchored_line, "QUESTION%s%s%s%[reanchored%] moved note", "panel claim rows should keep extra padding between the kind label and note")
+t.assert_match(reanchored_line, "^%s%sQUESTION%s+L2:C1%-L2:C8$", "panel claim metadata should put the kind before the range")
+t.assert_eq(reanchored_note_line, "    [reanchored] moved note", "panel note should render below metadata with full row width")
 t.assert_eq(reanchored_item ~= nil, true, "panel lines should expose the reanchored claim item")
 
 local kind_highlight

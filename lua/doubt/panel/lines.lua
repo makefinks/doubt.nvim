@@ -2,7 +2,6 @@ local claims = require("doubt.claims")
 
 local M = {}
 local CLAIM_KIND_CELL_WIDTH = 8
-local CLAIM_NOTE_PADDING = "   "
 
 local function count_claims(files)
 	local total = 0
@@ -221,80 +220,48 @@ local function build_claim_lines(path, claim, panel_width)
 	local pw = panel_width or vim.o.columns
 	local items = {}
 
-	if pw >= 50 then
-		local prefix = string.format("  %-16s  %s%s", line_label, kind_cell, CLAIM_NOTE_PADDING)
-		local kind_col = string.find(prefix, kind_cell, 1, true)
-		local continuation_prefix = string.rep(" ", vim.fn.strdisplaywidth(prefix))
-		local note_width = math.max(pw - vim.fn.strdisplaywidth(prefix), 1)
-		local wrapped_note = wrap_text(note, note_width)
+	local meta_text = string.format("  %s  %s", kind_cell, line_label)
+	local kind_col = string.find(meta_text, kind_cell, 1, true)
+	local line_col = string.find(meta_text, line_label, 1, true)
+	local meta_item = with_defaults({
+		kind = "claim",
+		id = claim.id,
+		active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
+		path = path,
+		line = claim.start_line + 1,
+		col = claim.start_col or 0,
+		text = meta_text,
+	})
+	if kind_col then
+		add_highlight(meta_item, kind_col - 1, kind_col - 1 + #kind_cell, meta.hl)
+	end
+	if line_col then
+		add_highlight(meta_item, line_col - 1, line_col - 1 + #line_label, "DoubtPanelMuted")
+	end
+	table.insert(items, meta_item)
 
-		for idx, note_line in ipairs(wrapped_note) do
-			local text = (idx == 1 and prefix or continuation_prefix) .. note_line
-			local item = with_defaults({
-				kind = "claim",
-				id = claim.id,
-				active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
-				path = path,
-				line = claim.start_line + 1,
-				col = claim.start_col or 0,
-				text = text,
-			})
+	local note_prefix = "    "
+	local continuation_prefix = string.rep(" ", vim.fn.strdisplaywidth(note_prefix))
+	local note_width = math.max(pw - vim.fn.strdisplaywidth(note_prefix), 1)
+	local wrapped_note = wrap_text(note, note_width)
 
-			if idx == 1 then
-				add_highlight(item, 2, 2 + #line_label, "DoubtPanelMuted")
-				if kind_col then
-					add_highlight(item, kind_col - 1, kind_col - 1 + #kind_cell, meta.hl)
-				end
-			end
-
-			if claim.note == "" then
-				add_highlight(item, vim.fn.strdisplaywidth(prefix), #text, "DoubtPanelMuted")
-			end
-
-			table.insert(items, item)
-		end
-	else
-		table.insert(items, with_defaults({
+	for idx, note_line in ipairs(wrapped_note) do
+		local text = (idx == 1 and note_prefix or continuation_prefix) .. note_line
+		local item = with_defaults({
 			kind = "claim",
 			id = claim.id,
 			active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
 			path = path,
 			line = claim.start_line + 1,
 			col = claim.start_col or 0,
-			text = "  " .. line_label,
-		}))
-		add_highlight(items[#items], 2, 2 + #line_label, "DoubtPanelMuted")
+			text = text,
+		})
 
-		local meta_prefix = string.format("    %s%s", kind_cell, CLAIM_NOTE_PADDING)
-		local meta_kind_col = string.find(meta_prefix, kind_cell, 1, true)
-		local meta_cont = string.rep(" ", vim.fn.strdisplaywidth(meta_prefix))
-		local note_width = math.max(pw - vim.fn.strdisplaywidth(meta_prefix), 1)
-		local wrapped_note = wrap_text(note, note_width)
-
-		for idx, note_line in ipairs(wrapped_note) do
-			local text = (idx == 1 and meta_prefix or meta_cont) .. note_line
-			local item = with_defaults({
-				kind = "claim",
-				id = claim.id,
-				active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
-				path = path,
-				line = claim.start_line + 1,
-				col = claim.start_col or 0,
-				text = text,
-			})
-
-			if idx == 1 and meta_kind_col then
-				add_highlight(item, meta_kind_col - 1, meta_kind_col - 1 + #kind_cell, meta.hl)
-			end
-
-			if claim.note == "" then
-				add_highlight(item, vim.fn.strdisplaywidth(meta_prefix), #text, "DoubtPanelMuted")
-			else
-				add_highlight(item, vim.fn.strdisplaywidth(meta_prefix), #text, meta.hl)
-			end
-
-			table.insert(items, item)
+		if claim.note == "" then
+			add_highlight(item, vim.fn.strdisplaywidth(note_prefix), #text, "DoubtPanelMuted")
 		end
+
+		table.insert(items, item)
 	end
 
 	return items
