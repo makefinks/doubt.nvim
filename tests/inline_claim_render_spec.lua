@@ -1,10 +1,12 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
+local temp_preferences = vim.fs.joinpath(vim.fn.tempname(), "doubt-preferences.json")
 local temp_file = vim.fs.joinpath(vim.fn.tempname(), "inline-render.lua")
 local deleted_line_file = vim.fs.joinpath(vim.fn.tempname(), "deleted-lines.lua")
 
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
+vim.fn.mkdir(vim.fs.dirname(temp_preferences), "p")
 vim.fn.mkdir(vim.fs.dirname(temp_file), "p")
 vim.fn.mkdir(vim.fs.dirname(deleted_line_file), "p")
 vim.fn.writefile({ "local alpha = 1", "local beta = alpha + 1", "return beta" }, temp_file)
@@ -18,6 +20,7 @@ local state = require("doubt.state")
 doubt.setup({
 	keymaps = false,
 	state_path = temp_state,
+	preferences_path = temp_preferences,
 	inline_notes = {
 		enabled = true,
 		max_width = 14,

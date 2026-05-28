@@ -10,6 +10,7 @@ local healthcheck = require("doubt.healthcheck")
 local input = require("doubt.input")
 local keymaps = require("doubt.keymaps")
 local panel = require("doubt.panel")
+local preferences = require("doubt.preferences")
 local render = require("doubt.render")
 local state = require("doubt.state")
 
@@ -387,6 +388,7 @@ end
 
 function M.toggle_inline_notes()
 	local layout = ctx.toggle_inline_notes()
+	preferences.save(config.get(), { inline_notes_layout = layout }, ctx.notify)
 	if layout == "inline" then
 		clear_expanded_claim()
 	end
@@ -1142,6 +1144,7 @@ function M.setup(opts)
 	claims.configure(config.get().claim_kinds)
 	local workspace = ctx.normalize_path(vim.fn.getcwd())
 	state.load(config.get(), ctx.normalize_path, ctx.notify, workspace)
+	ctx.set_inline_notes_layout(preferences.load(config.get(), ctx.notify).inline_notes_layout or "block")
 	vim.api.nvim_clear_autocmds({ group = ctx.augroup })
 
 	-- Decorations are derived from state, so entering a window is enough to restore them.

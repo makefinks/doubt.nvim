@@ -102,6 +102,15 @@ function M.new(deps)
 		return ctx.inline_notes_layout_name
 	end
 
+	function ctx.set_inline_notes_layout(layout)
+		if layout ~= "block" and layout ~= "inline" then
+			return ctx.inline_notes_layout_name
+		end
+
+		ctx.inline_notes_layout_name = layout
+		return ctx.inline_notes_layout_name
+	end
+
 	function ctx.toggle_inline_notes()
 		ctx.inline_notes_layout_name = ctx.inline_notes_layout_name == "block" and "inline" or "block"
 		return ctx.inline_notes_layout_name

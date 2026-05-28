@@ -123,6 +123,7 @@ local DEFAULTS = {
 		width = 56,
 		side = "right",
 	},
+	preferences_path = vim.fs.joinpath(vim.fn.stdpath("state"), "doubt.nvim-preferences.json"),
 	state_path = vim.fs.joinpath(vim.fn.stdpath("state"), "doubt.nvim.json"),
 	signs = {
 		file = "?",
