@@ -139,7 +139,7 @@ function M.render_claim(ctx, bufnr, claim)
 	local render_block_notes = config.inline_notes.enabled and inline_notes_layout == "block"
 	local inline_note = config.inline_notes.enabled
 		and inline_notes_layout == "inline"
-		and compact_inline_text(inline_text, config.inline_notes.max_width)
+		and (expanded and inline_text or compact_inline_text(inline_text, config.inline_notes.max_width))
 		or nil
 	local label_width = display_width(inline_label)
 	local content_width = 0
@@ -188,7 +188,7 @@ function M.render_claim(ctx, bufnr, claim)
 		end
 	end
 
-	if expanded then
+	if expanded and virt_lines then
 		for idx = 2, #body_lines do
 			local row_width = label_width + 1 + display_width(body_lines[idx])
 			local row_padding = content_width - row_width

@@ -180,6 +180,26 @@ t.assert_eq(reject_mark.virt_lines, nil, "inline notes should remove reject virt
 t.assert_match(virt_line_text(question_mark.virt_text), "%.%.%. 19 more", "inline notes should keep compact question text")
 t.assert_match(virt_line_text(reject_mark.virt_text), "%.%.%. 21 more", "inline notes should keep compact reject text")
 
+vim.api.nvim_win_set_cursor(0, { 1, 1 })
+local ok, err = pcall(function()
+	doubt.toggle_nearest_claim()
+end)
+
+t.assert_eq(ok, true, "expanding an inline note should not crash")
+
+marks = current_marks()
+question_mark = any_mark_by_sign_text(marks, "?")
+reject_mark = any_mark_by_sign_text(marks, "!")
+
+t.assert_eq(question_mark ~= nil, true, "expanded inline notes should keep the question sign")
+t.assert_eq(reject_mark ~= nil, true, "expanded inline notes should keep other visible signs")
+t.assert_eq(question_mark.virt_lines, nil, "expanded inline notes should stay in end-of-line layout")
+t.assert_match(virt_line_text(question_mark.virt_text), "alpha beta gamma delta", "expanded inline note should show the full text")
+
+if not ok then
+	t.fail(err)
+end
+
 doubt.toggle_inline_notes()
 
 marks = current_marks()
