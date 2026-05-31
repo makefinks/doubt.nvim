@@ -34,6 +34,46 @@ local function stop_insert_mode()
 	end)
 end
 
+local function relative_path(path, root)
+	path = vim.fs.normalize(path)
+	root = vim.fs.normalize(root or vim.uv.cwd() or ".")
+
+	local prefix = root .. "/"
+	if path:sub(1, #prefix) == prefix then
+		return path:sub(#prefix + 1)
+	end
+
+	return path
+end
+
+local function should_skip_file_path(path)
+	local normalized = vim.fs.normalize(path)
+	return normalized:match("/%.git/")
+		or normalized:match("/%.deps/")
+		or normalized:match("/node_modules/")
+		or normalized:match("/%.DS_Store$")
+end
+
+local function workspace_files(root, limit)
+	root = vim.fs.normalize(root or vim.uv.cwd() or ".")
+	limit = math.max(tonumber(limit) or 500, 1)
+
+	local files = vim.fs.find(function(name, path)
+		local full_path = vim.fs.joinpath(path, name)
+		return not should_skip_file_path(full_path)
+	end, {
+		limit = limit,
+		path = root,
+		type = "file",
+	})
+
+	for index, path in ipairs(files) do
+		files[index] = relative_path(path, root)
+	end
+	table.sort(files)
+	return files
+end
+
 function M.ask_text(opts, callback)
 	opts = opts or {}
 	local ok, Input = pcall(require, "nui.input")
@@ -140,20 +180,29 @@ function M.ask_note(opts, callback)
 
 	local finished = false
 	local default_value = opts.default or ""
+	local picker_open = false
 
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "wipe"
 	vim.bo[bufnr].swapfile = false
 	vim.bo[bufnr].modifiable = true
 	vim.bo[bufnr].filetype = "doubt-note"
+	vim.bo[bufnr].omnifunc = ""
+	vim.bo[bufnr].completefunc = ""
+	vim.b[bufnr].completion = false
 	vim.wo[winid].wrap = false
 	vim.wo[winid].number = false
 	vim.wo[winid].relativenumber = false
 	vim.wo[winid].signcolumn = "no"
 	vim.wo[winid].cursorline = false
 
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { default_value })
-	vim.api.nvim_win_set_cursor(winid, { 1, vim.fn.strchars(default_value) })
+	local default_lines = vim.split(default_value, "\n", { plain = true })
+	if vim.tbl_isempty(default_lines) then
+		default_lines = { "" }
+	end
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, default_lines)
+	local last_line = default_lines[#default_lines] or ""
+	vim.api.nvim_win_set_cursor(winid, { #default_lines, vim.fn.strchars(last_line) })
 
 	local function finish(value, cancelled)
 		if finished then
@@ -174,20 +223,67 @@ function M.ask_note(opts, callback)
 		finish(nil, true)
 	end
 
+	local function insert_text_at_cursor(text, position)
+		if finished or not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_win_is_valid(winid) then
+			return
+		end
+
+		local cursor = position or vim.api.nvim_win_get_cursor(winid)
+		local row = cursor[1] - 1
+		local col = cursor[2]
+		vim.api.nvim_buf_set_text(bufnr, row, col, row, col, { text })
+		vim.api.nvim_win_set_cursor(winid, { cursor[1], col + #text })
+	end
+
+	local function resume_note_insert()
+		if finished or not vim.api.nvim_win_is_valid(winid) then
+			return
+		end
+
+		vim.api.nvim_set_current_win(winid)
+		vim.cmd("startinsert!")
+	end
+
+	local function pick_file_reference()
+		local insert_position = vim.api.nvim_win_get_cursor(winid)
+		local files = opts.files or workspace_files(opts.root or opts.cwd, opts.file_limit)
+		if vim.tbl_isempty(files) then
+			vim.notify("No files found to reference", vim.log.levels.INFO, { title = "doubt.nvim" })
+			return
+		end
+
+		picker_open = true
+		vim.ui.select(files, {
+			prompt = opts.file_prompt or "Reference file",
+		}, function(path)
+			picker_open = false
+			if path then
+				insert_text_at_cursor("`@" .. path .. "` ", insert_position)
+			end
+			vim.schedule(resume_note_insert)
+		end)
+	end
+
 	local function map(mode, lhs, rhs)
 		vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, nowait = true, silent = true })
 	end
 
 	map("i", "<CR>", submit)
 	map("n", "<CR>", submit)
+	if opts.file_references ~= false then
+		map("i", "@", pick_file_reference)
+	end
 	map("i", "<Esc>", cancel)
 	map("n", "<Esc>", cancel)
 	map("n", "q", cancel)
 
 	vim.api.nvim_create_autocmd("BufLeave", {
 		buffer = bufnr,
-		once = true,
 		callback = function()
+			if picker_open then
+				return
+			end
+
 			if not finished then
 				cancel()
 			end

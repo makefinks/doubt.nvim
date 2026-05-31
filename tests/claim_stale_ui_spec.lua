@@ -90,6 +90,13 @@ render.render_claim(render_ctx, bufnr, file_state.claims[2])
 local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, render_ctx.ns, 0, -1, { details = true })
 local stale_range
 local stale_sign
+local function virt_line_text(line)
+	local chunks = {}
+	for _, chunk in ipairs(line or {}) do
+		table.insert(chunks, chunk[1])
+	end
+	return table.concat(chunks, "")
+end
 for _, mark in ipairs(extmarks) do
 	local details = mark[4] or {}
 	if details.hl_group == "DoubtStaleQuestion" then
@@ -104,7 +111,9 @@ t.assert_eq(stale_range ~= nil, true, "stale claims should render with a stale-s
 t.assert_eq(stale_sign ~= nil, true, "stale claims should still render their existing kind sign")
 t.assert_eq(stale_sign.sign_hl_group, "DoubtStaleQuestion", "stale signs should use the muted stale highlight")
 t.assert_eq(stale_sign.virt_lines ~= nil, true, "stale claims should still expose inline inspection text")
-t.assert_match(stale_sign.virt_lines[2][3][1], "^ %[%a+%] stale note$", "inline inspection should keep stale note text readable in place")
+local stale_inline_text = virt_line_text(stale_sign.virt_lines[2])
+t.assert_match(stale_inline_text, "%[stale%]", "inline inspection should keep stale marker text readable in place")
+t.assert_match(stale_inline_text, "stale note", "inline inspection should keep stale note text readable in place")
 
 local lines = panel.build_lines({
 	config = require("doubt.config"),

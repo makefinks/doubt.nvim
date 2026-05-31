@@ -2,16 +2,15 @@
 local M = {}
 
 local DEFAULTS = {
-		export = {
-			default_template = "review",
-			instructions = {
-				question = "Explain the code and address the feedback without modifying the code.",
-				concern = "Investigate the concern, explain whether it is valid, and revise the code if needed.",
-				reject = "Remove or replace the code according to the feedback.",
-			},
-		register = "+",
-				templates = {
-					raw = "{{xml}}",
+	export = {
+		default_template = "review",
+		instructions = {
+			question = "Explain the code and address the feedback without modifying the code.",
+			concern = "Investigate the concern, explain whether it is valid, and revise the code if needed.",
+			reject = "Remove or replace the code according to the feedback.",
+		},
+		templates = {
+			raw = "{{xml}}",
 				review = table.concat({
 					"The reviewer has provided feedback for the code in the xml below.",
 					"Fetch every referenced file and line from the repository before performing claim specific actions.",
@@ -47,6 +46,7 @@ local DEFAULTS = {
 				}, "\n"),
 		},
 	},
+	register = "+",
 	input = {
 		border = "rounded",
 		prompts = {
@@ -65,7 +65,7 @@ local DEFAULTS = {
 			order = 10,
 			styles = {
 				inline_label = { fg = "#08141F", bg = "#7DD3FC", bold = true },
-				inline_text = { fg = "#F5F5F5", bg = "#111827", italic = true },
+				inline_text = { fg = "#F5F5F5", bg = "#000000", italic = true },
 				mark = { fg = "#9DDCFA", bg = "#173042", bold = true },
 			},
 		},
@@ -77,7 +77,7 @@ local DEFAULTS = {
 			order = 15,
 			styles = {
 				inline_label = { fg = "#201600", bg = "#F6C453", bold = true },
-				inline_text = { fg = "#F5F5F5", bg = "#111827", italic = true },
+				inline_text = { fg = "#F5F5F5", bg = "#000000", italic = true },
 				mark = { fg = "#FFE08A", bg = "#4A3200", bold = true },
 			},
 		},
@@ -89,14 +89,14 @@ local DEFAULTS = {
 			order = 20,
 			styles = {
 				inline_label = { fg = "#FFF5F5", bg = "#FF3B30", bold = true },
-				inline_text = { fg = "#F5F5F5", bg = "#111827", italic = true },
+				inline_text = { fg = "#F5F5F5", bg = "#000000", italic = true },
 				mark = { fg = "#FFC2C2", bg = "#442526", bold = true },
 			},
 		},
 	},
 	inline_notes = {
 		enabled = true,
-		max_width = 60,
+		max_width = 80,
 		prefix = "",
 		padding_right = 2,
 	},
@@ -266,6 +266,10 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownBold", { fg = "#F8E7A1", bold = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownItalic", { fg = "#A8B3C2", italic = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownStrike", { strikethrough = true })
+	vim.api.nvim_set_hl(0, "DoubtInlineMarkdownCode", { fg = "#FDE68A" })
+	vim.api.nvim_set_hl(0, "DoubtInlineMarkdownBold", { fg = "#F8E7A1", bold = true })
+	vim.api.nvim_set_hl(0, "DoubtInlineMarkdownItalic", { italic = true })
+	vim.api.nvim_set_hl(0, "DoubtInlineMarkdownStrike", { strikethrough = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpNormal", { fg = "#D5DEE8" })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpTitle", { fg = "#F8E7A1", bold = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelHelpSection", { fg = "#8EC5FC", bold = true })

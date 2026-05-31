@@ -2,6 +2,17 @@
 local claims = require("doubt.claims")
 
 local M = {}
+local find_markdown_span
+local MARKDOWN_SPACE_SENTINEL = "\001doubt_md_space\001"
+
+local MARKDOWN_DELIMITERS = {
+	{ marker = "`", hl_group = "DoubtInlineMarkdownCode" },
+	{ marker = "**", hl_group = "DoubtInlineMarkdownBold" },
+	{ marker = "__", hl_group = "DoubtInlineMarkdownBold" },
+	{ marker = "~~", hl_group = "DoubtInlineMarkdownStrike" },
+	{ marker = "*", hl_group = "DoubtInlineMarkdownItalic" },
+	{ marker = "_", hl_group = "DoubtInlineMarkdownItalic", word_boundary = true },
+}
 
 local function compact_inline_text(text, max_width)
 	if not max_width or max_width <= 0 then
@@ -29,9 +40,25 @@ local function wrap_inline_text(text, max_width)
 		return { text }
 	end
 
+	local protected = {}
+	local index = 1
+	while index <= #text do
+		local span = find_markdown_span(text, index)
+		if span and span.open_start == index then
+			local marked = text:sub(span.open_start, span.close_end - 1):gsub(" ", MARKDOWN_SPACE_SENTINEL)
+			table.insert(protected, marked)
+			index = span.close_end
+		else
+			table.insert(protected, text:sub(index, index))
+			index = index + 1
+		end
+	end
+	local protected_text = table.concat(protected)
+
 	local lines = {}
 	local current = ""
-	for word in string.gmatch(text, "%S+") do
+	for word in string.gmatch(protected_text, "%S+") do
+		word = word:gsub(MARKDOWN_SPACE_SENTINEL, " ")
 		local candidate = current == "" and word or (current .. " " .. word)
 		if vim.fn.strdisplaywidth(candidate) <= max_width then
 			current = candidate
@@ -79,6 +106,103 @@ end
 local function line_byte_length(bufnr, line)
 	local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1] or ""
 	return #text
+end
+
+local function is_word_char(char)
+	return char ~= "" and char:match("[%w_]") ~= nil
+end
+
+local function valid_marker_boundary(text, marker, open_start, close_start, close_end, word_boundary)
+	local content_start = open_start + #marker
+	if close_start <= content_start then
+		return false
+	end
+
+	if text:sub(content_start, content_start):match("%s") or text:sub(close_start - 1, close_start - 1):match("%s") then
+		return false
+	end
+
+	if word_boundary then
+		if is_word_char(text:sub(open_start - 1, open_start - 1)) or is_word_char(text:sub(close_end, close_end)) then
+			return false
+		end
+	end
+
+	return true
+end
+
+find_markdown_span = function(text, index)
+	for _, delimiter in ipairs(MARKDOWN_DELIMITERS) do
+		local marker = delimiter.marker
+		if text:sub(index, index + #marker - 1) == marker then
+			local content_start = index + #marker
+			local close_start = text:find(marker, content_start, true)
+			if close_start then
+				local close_end = close_start + #marker
+				if valid_marker_boundary(text, marker, index, close_start, close_end, delimiter.word_boundary) then
+					return {
+						open_start = index,
+						content_start = content_start,
+						close_start = close_start,
+						close_end = close_end,
+						hl_group = delimiter.hl_group,
+					}
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function inline_markdown_chunks(text, base_hl)
+	local chunks = {}
+	local index = 1
+	while index <= #text do
+		local span = find_markdown_span(text, index)
+		if span then
+			if span.open_start > index then
+				table.insert(chunks, { text:sub(index, span.open_start - 1), base_hl })
+			end
+			table.insert(chunks, { text:sub(span.content_start, span.close_start - 1), span.hl_group })
+			index = span.close_end
+		else
+			local next_index = #text + 1
+			for seek = index + 1, #text do
+				if find_markdown_span(text, seek) then
+					next_index = seek
+					break
+				end
+			end
+			table.insert(chunks, { text:sub(index, next_index - 1), base_hl })
+			index = next_index
+		end
+	end
+
+	if vim.tbl_isempty(chunks) then
+		return { { text, base_hl } }
+	end
+
+	return chunks
+end
+
+local function prefixed_markdown_chunks(prefix, text, base_hl)
+	local chunks = {}
+	if prefix ~= "" then
+		table.insert(chunks, { prefix, base_hl })
+	end
+	for _, chunk in ipairs(inline_markdown_chunks(text, base_hl)) do
+		table.insert(chunks, chunk)
+	end
+	return chunks
+end
+
+local function chunks_width(chunks)
+	local width = 0
+	for _, chunk in ipairs(chunks or {}) do
+		width = width + display_width(chunk[1])
+	end
+	return width
 end
 
 local function clamp_row(bufnr, line)
@@ -133,6 +257,10 @@ function M.render_claim(ctx, bufnr, claim)
 	local body_lines = expanded
 		and wrap_inline_text(inline_text, config.inline_notes.max_width)
 		or { compact_inline_text(inline_text, config.inline_notes.max_width) }
+	local body_chunks = {}
+	for idx, body_line in ipairs(body_lines) do
+		body_chunks[idx] = prefixed_markdown_chunks(" ", body_line, inline_text_hl)
+	end
 	local right_padding = math.max(config.inline_notes.padding_right or 0, 0)
 	local prefix = config.inline_notes.prefix or ""
 	local inline_notes_layout = ctx.inline_notes_layout and ctx.inline_notes_layout() or "block"
@@ -143,8 +271,8 @@ function M.render_claim(ctx, bufnr, claim)
 		or nil
 	local label_width = display_width(inline_label)
 	local content_width = 0
-	for _, body_line in ipairs(body_lines) do
-		content_width = math.max(content_width, label_width + 1 + display_width(body_line))
+	for idx in ipairs(body_lines) do
+		content_width = math.max(content_width, label_width + chunks_width(body_chunks[idx]))
 	end
 	content_width = content_width + right_padding
 
@@ -166,19 +294,16 @@ function M.render_claim(ctx, bufnr, claim)
 				prefix,
 				"DoubtInlinePrefix",
 			},
-			{
-				inline_label,
-				inline_label_hl,
-			},
-			{
-				" " .. body_lines[1],
-				inline_text_hl,
-			},
+		{
+			inline_label,
+			inline_label_hl,
 		},
+		unpack(body_chunks[1]),
+	},
 	} or nil
 
 	if virt_lines then
-		local first_row_width = label_width + 1 + display_width(body_lines[1])
+		local first_row_width = label_width + chunks_width(body_chunks[1])
 		local first_row_padding = content_width - first_row_width
 		if first_row_padding > 0 then
 			table.insert(virt_lines[2], {
@@ -190,7 +315,7 @@ function M.render_claim(ctx, bufnr, claim)
 
 	if expanded and virt_lines then
 		for idx = 2, #body_lines do
-			local row_width = label_width + 1 + display_width(body_lines[idx])
+			local row_width = label_width + chunks_width(body_chunks[idx])
 			local row_padding = content_width - row_width
 			local row = {
 				{
@@ -201,10 +326,7 @@ function M.render_claim(ctx, bufnr, claim)
 					pad(label_width),
 					"DoubtInlineBar",
 				},
-				{
-					" " .. body_lines[idx],
-					inline_text_hl,
-				},
+				unpack(body_chunks[idx]),
 			}
 			if row_padding > 0 then
 				table.insert(row, {
@@ -246,7 +368,7 @@ function M.render_claim(ctx, bufnr, claim)
 		virt_text = inline_note and {
 			{ " ", "Normal" },
 			{ inline_label, inline_label_hl },
-			{ " " .. inline_note, inline_text_hl },
+			unpack(prefixed_markdown_chunks(" ", inline_note, inline_text_hl)),
 		} or nil,
 		virt_text_pos = inline_note and "eol" or nil,
 		virt_lines = virt_lines,

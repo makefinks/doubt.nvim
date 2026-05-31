@@ -80,6 +80,39 @@ for _, command in ipairs(commands) do
 end
 t.assert_eq(closed_insert, true, "note prompt should leave insert mode when closed")
 
+vim.cmd = original_cmd
+local original_select = vim.ui.select
+local selected_items = nil
+local selected_prompt = nil
+local select_callback = nil
+vim.ui.select = function(items, opts, callback)
+	selected_items = items
+	selected_prompt = opts.prompt
+	select_callback = callback
+end
+
+local reference_note = input.ask_note({
+	default = "see ",
+	files = { "lua/doubt/init.lua", "lua/doubt/input.lua" },
+}, function() end)
+vim.api.nvim_set_current_win(reference_note.winid)
+vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("A@", true, false, true), "xt", false)
+vim.wait(20, function()
+	return selected_items ~= nil
+end)
+vim.api.nvim_win_set_cursor(reference_note.winid, { 1, 0 })
+select_callback(selected_items[2])
+
+t.assert_eq(selected_prompt, "Reference file", "file reference picker should use a clear prompt")
+t.assert_eq(selected_items, { "lua/doubt/init.lua", "lua/doubt/input.lua" }, "file picker should receive candidate paths")
+t.assert_eq(
+	vim.api.nvim_buf_get_lines(reference_note.bufnr, 0, -1, false)[1],
+	"see `@lua/doubt/input.lua` ",
+	"selected file path should be inserted as a plain @ reference"
+)
+reference_note.cancel()
+vim.ui.select = original_select
+
 local original_input = vim.fn.input
 local original_inputsave = vim.fn.inputsave
 local original_inputrestore = vim.fn.inputrestore

@@ -249,5 +249,107 @@ t.assert_eq(deleted_mark.end_row, 0, "deleted-line claim highlight should clamp 
 if not ok then
 	t.fail(err)
 end
+
+	it("renders markdown styling in virtual claim text", function()
+		local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
+		local temp_preferences = vim.fs.joinpath(vim.fn.tempname(), "doubt-preferences.json")
+		local temp_file = vim.fs.joinpath(vim.fn.tempname(), "inline-markdown.lua")
+
+		vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
+		vim.fn.mkdir(vim.fs.dirname(temp_preferences), "p")
+		vim.fn.mkdir(vim.fs.dirname(temp_file), "p")
+		vim.fn.writefile({ "local value = 1", "return value" }, temp_file)
+
+		local doubt = require("doubt")
+		local claims = require("doubt.claims")
+		local render = require("doubt.render")
+		local state = require("doubt.state")
+
+		doubt.setup({
+			keymaps = false,
+			state_path = temp_state,
+			preferences_path = temp_preferences,
+			inline_notes = {
+				enabled = true,
+				max_width = 90,
+				padding_right = 1,
+				prefix = "",
+			},
+		})
+
+		vim.cmd.edit(temp_file)
+		doubt.start_session({ name = "inline-markdown", quiet = true })
+
+		local bufnr = vim.api.nvim_get_current_buf()
+		local ns = vim.api.nvim_get_namespaces()["doubt.nvim"]
+		local path = vim.fs.normalize(vim.api.nvim_buf_get_name(bufnr))
+		local file_state = state.ensure_file_entry(path)
+
+		table.insert(file_state.claims, {
+			id = "markdown",
+			kind = "question",
+			start_line = 0,
+			start_col = 0,
+			end_line = 0,
+			end_col = 5,
+			note = "`alpha.lua` **bold** *italic* ~~strike~~",
+		})
+
+		claims.sort_claims(file_state.claims)
+
+		local ctx = {
+			ns = ns,
+			config = require("doubt.config"),
+			state = state,
+			current_path = function(target_bufnr)
+				return vim.fs.normalize(vim.api.nvim_buf_get_name(target_bufnr))
+			end,
+		}
+
+		render.refresh_buffer(ctx, bufnr)
+		local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
+		local details = nil
+		for _, mark in ipairs(marks) do
+			local mark_details = mark[4] or {}
+			if vim.trim(mark_details.sign_text or "") == "?" and mark_details.virt_lines then
+				details = mark_details
+				break
+			end
+		end
+
+		t.assert_eq(details ~= nil, true, "markdown claim should render as virtual lines")
+
+		local function has_hl_with_text(chunks, hl_group, text)
+			for _, chunk in ipairs(chunks or {}) do
+				if chunk[2] == hl_group and chunk[1] == text then
+					return true
+				end
+			end
+			return false
+		end
+
+		local text_line = details.virt_lines[2]
+		t.assert_eq(has_hl_with_text(text_line, "DoubtInlineMarkdownCode", "alpha.lua"), true, "inline code markdown should be highlighted")
+		t.assert_eq(has_hl_with_text(text_line, "DoubtInlineMarkdownBold", "bold"), true, "bold markdown should be highlighted")
+		t.assert_eq(has_hl_with_text(text_line, "DoubtInlineMarkdownItalic", "italic"), true, "italic markdown should be highlighted")
+		t.assert_eq(has_hl_with_text(text_line, "DoubtInlineMarkdownStrike", "strike"), true, "strikethrough markdown should be highlighted")
+
+		doubt.toggle_inline_notes()
+		marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
+		details = nil
+		for _, mark in ipairs(marks) do
+			local mark_details = mark[4] or {}
+			if vim.trim(mark_details.sign_text or "") == "?" and mark_details.virt_text then
+				details = mark_details
+				break
+			end
+		end
+
+		t.assert_eq(details ~= nil, true, "markdown claim should render as inline virtual text")
+		t.assert_eq(has_hl_with_text(details.virt_text, "DoubtInlineMarkdownCode", "alpha.lua"), true, "inline layout should keep code markdown styling")
+		t.assert_eq(has_hl_with_text(details.virt_text, "DoubtInlineMarkdownBold", "bold"), true, "inline layout should keep bold markdown styling")
+		t.assert_eq(has_hl_with_text(details.virt_text, "DoubtInlineMarkdownItalic", "italic"), true, "inline layout should keep italic markdown styling")
+		t.assert_eq(has_hl_with_text(details.virt_text, "DoubtInlineMarkdownStrike", "strike"), true, "inline layout should keep strikethrough markdown styling")
 	end)
+end)
 end)
