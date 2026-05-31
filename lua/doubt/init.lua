@@ -711,7 +711,7 @@ function M.start_session(opts)
 	end
 
 	prompt_session_name({
-		prompt = "Start session: ",
+		prompt = "Start Doubt Session: ",
 		title = "new doubt session",
 	}, function(session_name, cancelled)
 		if cancelled then

@@ -96,6 +96,28 @@ function M.ask_text(opts, callback)
 	end)
 end
 
+function M.ask_command_text(opts, callback)
+	opts = opts or {}
+	local cancel_value = "\003doubt-cancel-" .. tostring(vim.uv.hrtime())
+	local prompt = opts.prompt or opts.title or ""
+	local default = opts.default or ""
+
+	pcall(vim.fn.inputsave)
+	local ok, value = pcall(vim.fn.input, {
+		prompt = prompt,
+		default = default,
+		cancelreturn = cancel_value,
+	})
+	pcall(vim.fn.inputrestore)
+
+	if not ok or value == cancel_value then
+		callback(nil, true)
+		return
+	end
+
+	callback(vim.trim(value or ""), false)
+end
+
 function M.ask_note(opts, callback)
 	opts = opts or {}
 	local anchor_line = math.max(tonumber(opts.line) or 0, 0)

@@ -2,13 +2,10 @@ local M = {}
 
 function M.prompt_session_name(config, input, state, ctx, opts, callback)
 	opts = opts or {}
-	local input_config = config.get().input or {}
-	input.ask_text({
-		border = input_config.border,
+	input.ask_command_text({
 		default = opts.default,
 		prompt = opts.prompt or "Session name: ",
 		title = opts.title or "session",
-		width = input_config.width,
 	}, function(name, cancelled)
 		if cancelled then
 			callback(nil, true)
@@ -33,7 +30,7 @@ function M.ensure_active_session(state, prompt_session_name, start_session, call
 	end
 
 	prompt_session_name({
-		prompt = "Start session: ",
+		prompt = "Start Doubt Session: ",
 		title = "new doubt session",
 	}, function(session_name, cancelled)
 		if cancelled then
