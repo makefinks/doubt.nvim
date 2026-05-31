@@ -55,6 +55,7 @@ local DEFAULTS = {
 			reject = "Reject note: ",
 		},
 		width = 50,
+		height = 3,
 	},
 	claim_kinds = {
 		question = {
