@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("inline claim render", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 local temp_preferences = vim.fs.joinpath(vim.fn.tempname(), "doubt-preferences.json")
 local temp_file = vim.fs.joinpath(vim.fn.tempname(), "inline-render.lua")
@@ -246,3 +249,5 @@ t.assert_eq(deleted_mark.end_row, 0, "deleted-line claim highlight should clamp 
 if not ok then
 	t.fail(err)
 end
+	end)
+end)

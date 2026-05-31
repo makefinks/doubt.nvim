@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export default template", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -54,3 +57,5 @@ local text = doubt.copy_export()
 
 t.assert_match(text, "^Review wrapper", "copy export should use the configured default template")
 t.assert_eq(text, vim.fn.getreg("b"), "copy export should still write the rendered text to the configured register")
+	end)
+end)

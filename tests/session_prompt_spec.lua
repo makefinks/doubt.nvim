@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("session prompt", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.app.session_ui"] = nil
 
 local session_ui = require("doubt.app.session_ui")
@@ -95,3 +98,5 @@ end
 
 test_session_prompt_uses_native_command_line_input()
 test_empty_session_prompt_notifies_and_cancels()
+	end)
+end)

@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("export xml", function()
+	it("matches expected behavior", function()
 local config = require("doubt.config")
 local export = require("doubt.export")
 
@@ -93,3 +96,5 @@ t.assert_eq(
 	"reject should default to revise-or-remove guidance"
 )
 t.assert_match(xml, '</doubt>$', "xml should close the root node")
+	end)
+end)

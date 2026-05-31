@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel markdown render", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt"] = nil
 package.loaded["doubt.panel"] = nil
 
@@ -127,3 +130,5 @@ t.assert_eq(active_marks[1][4].priority, 300, "active claim sign should stay abo
 if vim.api.nvim_win_is_valid(panel_win) then
 	vim.api.nvim_win_close(panel_win, true)
 end
+	end)
+end)

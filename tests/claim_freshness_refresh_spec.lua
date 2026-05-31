@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("claim freshness refresh", function()
+	it("matches expected behavior", function()
 local doubt = require("doubt")
 local state = require("doubt.state")
 
@@ -86,3 +89,5 @@ doubt.setup({
 
 local missing_claim = state.current_files()[missing_source_path].claims[1]
 t.assert_eq(missing_claim.freshness, "stale", "load should classify missing files as stale")
+	end)
+end)

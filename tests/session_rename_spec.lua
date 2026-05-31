@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("session rename", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -212,3 +215,5 @@ t.assert_eq(panel_refresh_calls, 1, "panel lowercase r should remain mapped to r
 if vim.api.nvim_win_is_valid(panel_win) then
 	vim.api.nvim_win_close(panel_win, true)
 end
+	end)
+end)

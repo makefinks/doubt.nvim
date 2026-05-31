@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("workspace sessions", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt"] = nil
 package.loaded["doubt.state"] = nil
 
@@ -126,3 +129,5 @@ t.assert_eq(loose_end_col_claim.end_col, nil, "loose end columns should expand t
 t.assert_match(loose_end_col_claim.anchor.text, "session_cache%[name%]", "rebuilt anchor should include the intended range")
 
 vim.cmd("cd " .. vim.fn.fnameescape(previous_cwd))
+	end)
+end)

@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("export template variables", function()
+	it("matches expected behavior", function()
 local export = require("doubt.export")
 
 local files = {
@@ -51,3 +54,5 @@ local text, err, template_name = export.build_export_text({
 t.assert_eq(err, nil, "custom templates should render without an error")
 t.assert_eq(template_name, "summary", "the configured default template should be used")
 t.assert_match(text, "^session=review%-42 alias=review%-42 files=2 claims=3\n<doubt session=\"review%-42\">", "template variables should expand to session and count metadata")
+	end)
+end)

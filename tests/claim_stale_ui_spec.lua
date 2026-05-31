@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("claim stale ui", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt"] = nil
 
 local doubt = require("doubt")
@@ -135,3 +138,5 @@ t.assert_eq(summary_line ~= nil, true, "active sessions should include a summary
 t.assert_match(summary_line.text, "Stale%s+1", "session summary should roll up stale claim counts")
 
 vim.bo[bufnr].modified = false
+	end)
+end)

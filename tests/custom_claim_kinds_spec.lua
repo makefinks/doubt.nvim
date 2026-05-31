@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("custom claim kinds", function()
+	it("matches expected behavior", function()
 local export = require("doubt.export")
 
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
@@ -119,3 +122,5 @@ t.assert_match(
 )
 
 vim.ui.select = original_select
+	end)
+end)

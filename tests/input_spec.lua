@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("input", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.input"] = nil
 local mounted_input
 package.preload["nui.input"] = function()
@@ -130,3 +133,5 @@ vim.fn.input = original_input
 vim.fn.inputsave = original_inputsave
 vim.fn.inputrestore = original_inputrestore
 vim.cmd = original_cmd
+	end)
+end)

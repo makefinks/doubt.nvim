@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("healthcheck", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -68,3 +71,5 @@ vim.cmd("DoubtHealthcheck")
 local command_bufnr = vim.api.nvim_get_current_buf()
 local command_report = table.concat(vim.api.nvim_buf_get_lines(command_bufnr, 0, -1, false), "\n")
 t.assert_match(command_report, "Doubt Healthcheck Report", "command should open the healthcheck report buffer")
+	end)
+end)

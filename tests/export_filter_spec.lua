@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export filter", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -116,3 +119,5 @@ end)
 
 vim.notify = original_notify
 input.ask_checklist = original_picker
+	end)
+end)

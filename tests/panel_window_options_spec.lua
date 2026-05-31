@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel window options", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.panel"] = nil
 
 local claims = require("doubt.claims")
@@ -112,3 +115,5 @@ t.assert_eq(vim.wo[panel_win].concealcursor, "", "window should restore concealc
 if vim.api.nvim_win_is_valid(panel_win) then
 	vim.api.nvim_win_close(panel_win, true)
 end
+	end)
+end)

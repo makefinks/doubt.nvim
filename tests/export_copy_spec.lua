@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export copy", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -128,3 +131,5 @@ t.assert_match(multi_agent, "\n<doubt session=\"copy%-review\">", "multi_agent e
 
 input.ask_checklist = original_picker
 vim.ui.select = original_select
+	end)
+end)

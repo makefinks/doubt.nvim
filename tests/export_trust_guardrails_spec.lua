@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export trust guardrails", function()
+	it("matches expected behavior", function()
+
 local claims = require("doubt.claims")
 local export = require("doubt.export")
 
@@ -200,3 +203,5 @@ local xml = table.concat(xml_lines, "\n")
 t.assert_match(xml, 'note="only stale"', "raw xml export should remain available for deliberate stale-claim inspection")
 
 vim.notify = original_notify
+	end)
+end)

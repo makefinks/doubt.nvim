@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("performance characteristics", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt"] = nil
 package.loaded["doubt.panel"] = nil
 package.loaded["doubt.render"] = nil
@@ -306,9 +309,13 @@ write_file(render_file, build_source_lines(99, 120))
 		return left.avg_ms > right.avg_ms
 	end)
 
+if vim.env.DOUBT_BENCHMARK == "1" then
 	print(string.format("Performance benchmark (%d files, %d claims)", vim.tbl_count(state.current_files()), count_claims(state.current_files())))
 	for _, result in ipairs(results) do
 		print(format_result(result))
 	end
+end
 
 vim.cmd("tabnew")
+	end)
+end)

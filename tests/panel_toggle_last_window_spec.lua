@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel toggle last window", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.panel"] = nil
 
 local panel = require("doubt.panel")
@@ -73,3 +76,5 @@ t.assert_eq(vim.bo.buftype, "", "toggling the last panel window should leave a n
 t.assert_eq(vim.api.nvim_get_current_buf(), source_buf, "toggling the last panel window should restore the buffer that opened the panel")
 t.assert_eq(vim.api.nvim_get_current_buf() ~= panel_buf, true, "toggling the last panel window should replace the panel buffer")
 t.assert_eq(cleared > 0, true, "toggling the last panel window should clear focused claim state")
+	end)
+end)

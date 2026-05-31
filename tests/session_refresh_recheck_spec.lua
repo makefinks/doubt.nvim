@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("session refresh recheck", function()
+	it("matches expected behavior", function()
+
 local doubt = require("doubt")
 local state = require("doubt.state")
 
@@ -162,3 +165,5 @@ end
 run_activation_case("resume")
 run_activation_case("start")
 run_export_recheck_case()
+	end)
+end)

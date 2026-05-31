@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("plugin bootstrap", function()
+	it("matches expected behavior", function()
+
 vim.cmd.runtime("plugin/doubt.lua")
 
 t.assert_eq(vim.fn.exists(":DoubtExport"), 2, "plugin bootstrap should register user commands")
@@ -57,3 +60,5 @@ t.assert_eq(vim.fn.maparg("<leader>Dt", "n"), "", "re-running setup should remov
 t.assert_eq(vim.fn.maparg("<leader>Di", "n"), "", "re-running setup should remove the notes visibility keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Db", "n"), "", "re-running setup should remove the clear-buffer keymap when disabled")
 t.assert_eq(vim.fn.getcompletion("DoubtExport ", "cmdline"), { "agent", "multi_agent", "raw", "review" }, "re-running setup should refresh command completion")
+	end)
+end)

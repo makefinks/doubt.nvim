@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("session workspace scope", function()
+	it("matches expected behavior", function()
+
 local function load_state_module()
 	package.loaded["doubt.state"] = nil
 	return require("doubt.state")
@@ -257,3 +260,5 @@ test_workspace_scoped_listing_and_resume_guard()
 test_legacy_root_level_state_is_ignored_for_workspace_scope()
 test_session_mutations_only_touch_current_workspace_bucket()
 test_panel_shows_only_current_workspace_saved_sessions()
+	end)
+end)

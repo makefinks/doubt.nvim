@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("export template", function()
+	it("matches expected behavior", function()
 local config = require("doubt.config")
 local export = require("doubt.export")
 
@@ -124,3 +127,5 @@ local _, missing_err = export.build_export_text({
 })
 
 t.assert_eq(missing_err, "Unknown doubt export template: missing", "unknown templates should fail clearly")
+	end)
+end)

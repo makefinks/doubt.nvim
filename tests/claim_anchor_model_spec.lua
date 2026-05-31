@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("claim anchor model", function()
+	it("matches expected behavior", function()
 local claims = require("doubt.claims")
 
 local normalized = claims.normalize_claim({
@@ -155,3 +158,5 @@ t.assert_eq(contextual_result.freshness, "stale", "validation should stay stale 
 t.assert_eq(contextual_result.exact_match_count, 2, "contextual validation should still count all exact matches")
 t.assert_eq(contextual_result.contextual_match_count, 1, "contextual validation should expose a unique contextual candidate")
 t.assert_eq(contextual_result.match.start_line, 3, "contextual validation should surface the unique contextual match location")
+	end)
+end)

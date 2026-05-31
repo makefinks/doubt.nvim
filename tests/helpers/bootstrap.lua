@@ -3,6 +3,8 @@ local root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(source)))
 
 vim.opt.runtimepath:prepend(root)
 
+vim.notify = function() end
+
 package.preload["nui.input"] = package.preload["nui.input"] or function()
 	return function()
 		return {
@@ -18,8 +20,7 @@ local M = {
 }
 
 function M.fail(message)
-	vim.api.nvim_echo({ { message, "ErrorMsg" } }, true, { err = true })
-	vim.cmd("cquit 1")
+	error(message, 2)
 end
 
 function M.assert_eq(actual, expected, message)

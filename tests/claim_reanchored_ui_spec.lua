@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("claim reanchored ui", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt"] = nil
 
 local doubt = require("doubt")
@@ -106,3 +109,5 @@ local summary_text = claims.claim_summary(file_state.claims[2])
 t.assert_match(summary_text, "%[reanchored%] moved note", "shared claim summaries should expose reanchored state")
 
 vim.bo[bufnr].modified = false
+	end)
+end)

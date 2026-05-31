@@ -24,24 +24,25 @@ This file is intentionally practical: run commands exactly as listed, follow mod
 - `lua/doubt/input.lua`: wrappers around `nui.input` and checklist input.
 - `lua/doubt/commands.lua`: `:Doubt*` command wiring.
 - `lua/doubt/keymaps.lua`: default keymaps and claim-kind mappings.
-- `tests/*_spec.lua`: headless Neovim Lua specs.
+- `tests/*_spec.lua`: Plenary/Busted-style headless Neovim specs.
+- `tests/minimal_init.lua`: minimal runtime setup for Plenary tests.
 - `tests/helpers/bootstrap.lua`: test bootstrap and minimal assertions.
 
 ## Build, Lint, and Test Commands
 
 There is no separate build step and no configured linter/formatter in-repo (`stylua`, `luacheck`, `selene`, `make`, and CI config are absent).
 
-Use Neovim headless execution for tests:
+Use the Plenary headless runner for tests. `scripts/run_tests.sh` downloads `plenary.nvim` to `.deps/plenary.nvim` if `PLENARY_DIR` is not set.
 
 ```bash
 # Run full test suite (all spec files)
-for file in tests/*_spec.lua; do nvim --headless -u NONE -c "luafile $file" -c "qa" || exit 1; done
+./scripts/run_tests.sh
 
 # Run one specific test file (single-test workflow)
-nvim --headless -u NONE -c "luafile tests/plugin_bootstrap_spec.lua" -c "qa"
+./scripts/run_tests.sh tests/plugin_bootstrap_spec.lua
 
 # Example: run another specific spec file
-nvim --headless -u NONE -c "luafile tests/claim_anchor_model_spec.lua" -c "qa"
+./scripts/run_tests.sh tests/claim_anchor_model_spec.lua
 ```
 
 Recommended verification flow for code changes:
@@ -52,8 +53,8 @@ Recommended verification flow for code changes:
 
 ## Single-Test Guidance
 
-- Tests are file-scoped scripts, not function-filtered unit tests.
-- "Run a single test" means run one `*_spec.lua` file via `luafile`.
+- Tests are file-scoped Plenary/Busted specs.
+- "Run a single test" means pass one `*_spec.lua` file to `./scripts/run_tests.sh`.
 - Keep temporary state isolated using `vim.fn.tempname()` patterns (as existing tests do).
 - When adding a new spec, use naming `tests/<feature>_spec.lua`.
 

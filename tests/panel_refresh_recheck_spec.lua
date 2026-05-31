@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel refresh recheck", function()
+	it("matches expected behavior", function()
+
 local panel = require("doubt.panel")
 
 local original_render = panel.render
@@ -52,3 +55,5 @@ if vim.api.nvim_win_is_valid(winid) then
 end
 
 panel.render = original_render
+	end)
+end)

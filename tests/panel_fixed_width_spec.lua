@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel fixed width", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.panel"] = nil
 
 local panel = require("doubt.panel")
@@ -63,3 +66,5 @@ t.assert_eq(vim.api.nvim_win_get_width(panel_win), initial_width, "panel should 
 if vim.api.nvim_win_is_valid(panel_win) then
 	vim.api.nvim_win_close(panel_win, true)
 end
+	end)
+end)

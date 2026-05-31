@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export command", function()
+	it("matches expected behavior", function()
+
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 
@@ -56,3 +59,5 @@ t.assert_match(xml, '<file path="lua/doubt/init.lua">', "export should include t
 t.assert_match(xml, '<file path="lua/doubt/state.lua">', "export should include the second file")
 t.assert_match(xml, 'kind="reject"\n    start_line="5"\n    start_col="0"\n    end_line="7"\n    end_col="3"\n    note="needs fix"', "export should render file claims")
 t.assert_match(xml, 'kind="question"\n    start_line="1"\n    start_col="1"\n    end_line="1"\n    end_col="8"\n    note="verify persistence"', "export should render active-session data")
+	end)
+end)

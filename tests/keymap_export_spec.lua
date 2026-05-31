@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("keymap export", function()
+	it("matches expected behavior", function()
+
 local doubt = require("doubt")
 
 doubt.setup({
@@ -28,3 +31,5 @@ end
 
 t.assert_eq(export_map ~= nil, true, "export keymap should be registered")
 t.assert_eq(export_map.desc, "Copy doubt export for agent handoff", "export keymap should describe the handoff action")
+	end)
+end)

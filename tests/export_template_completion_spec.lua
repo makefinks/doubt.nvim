@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("export template completion", function()
+	it("matches expected behavior", function()
+
 local doubt = require("doubt")
 
 doubt.setup({
@@ -25,3 +28,5 @@ local filtered = vim.fn.getcompletion("DoubtExport cl", "cmdline")
 
 t.assert_eq(all, { "agent", "claude", "multi_agent", "raw", "review" }, "export command should complete named templates")
 t.assert_eq(filtered, { "claude" }, "export command completion should filter by prefix")
+	end)
+end)

@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("inline notes preferences", function()
+	it("matches expected behavior", function()
+
 local temp_dir = vim.fn.tempname()
 local temp_state = vim.fs.joinpath(temp_dir, "doubt-state.json")
 local temp_preferences = vim.fs.joinpath(temp_dir, "doubt-preferences.json")
@@ -34,3 +37,5 @@ doubt.setup({
 
 layout = doubt.toggle_inline_notes()
 t.assert_eq(layout, "inline", "setup should restore block layout from the separate preferences file")
+	end)
+end)

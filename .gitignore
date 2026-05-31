@@ -1,6 +1,7 @@
 .planning/
 .localdocs/
 .opencode/
+.deps/
 
 # Local maintainer assets (demo material, scratch work)
 .local/

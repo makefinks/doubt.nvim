@@ -1,5 +1,8 @@
 local t = dofile("tests/helpers/bootstrap.lua")
 
+describe("panel focus existing", function()
+	it("matches expected behavior", function()
+
 package.loaded["doubt.panel"] = nil
 
 local panel = require("doubt.panel")
@@ -58,3 +61,5 @@ panel.open(ctx)
 
 t.assert_eq(vim.api.nvim_get_current_win(), panel_win, "opening while the panel exists should focus it")
 t.assert_eq(vim.api.nvim_win_is_valid(panel_win), true, "focusing an existing panel should keep the panel window alive")
+	end)
+end)

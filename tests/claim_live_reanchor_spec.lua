@@ -1,4 +1,7 @@
 local t = dofile("tests/helpers/bootstrap.lua")
+
+describe("claim live reanchor", function()
+	it("matches expected behavior", function()
 local claims = require("doubt.claims")
 local state = require("doubt.state")
 
@@ -306,3 +309,5 @@ panel.render = original_panel_render
 vim.uv.new_timer = original_new_timer
 vim.schedule_wrap = original_schedule_wrap
 vim.bo[bufnr].modified = false
+	end)
+end)
