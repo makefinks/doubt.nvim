@@ -16,6 +16,9 @@ local state = require("doubt.state")
 
 local M = {}
 
+local deleted_claim_stack = {}
+local MAX_DELETED_CLAIMS = 50
+
 local ctx = context.new({
 	config = config,
 	panel = panel,
@@ -45,6 +48,27 @@ end
 
 local function current_cursor_position()
 	return session_ui.current_cursor_position()
+end
+
+local function trim_deleted_claim_stack()
+	while #deleted_claim_stack > MAX_DELETED_CLAIMS do
+		table.remove(deleted_claim_stack, 1)
+	end
+end
+
+local function push_deleted_claim(path, claim)
+	if type(path) ~= "string" or type(claim) ~= "table" then
+		return
+	end
+
+	table.insert(deleted_claim_stack, {
+		claim = vim.deepcopy(claim),
+		path = path,
+		session_name = state.active_session_name(),
+		session_source = state.active_session_source(),
+		workspace_key = ctx.normalize_path(vim.fn.getcwd()),
+	})
+	trim_deleted_claim_stack()
 end
 
 local function add_claim(kind, opts)
@@ -249,11 +273,14 @@ end
 
 function M.delete_claim(opts)
 	opts = opts or {}
+	local claim = state.find_claim(opts.path, opts.id)
 
 	if not state.delete_claim(opts.path, opts.id) then
 		ctx.notify("Unable to delete claim", vim.log.levels.WARN)
 		return
 	end
+
+	push_deleted_claim(opts.path, claim)
 
 	if ctx.expanded_claim and ctx.expanded_claim.path == opts.path and ctx.expanded_claim.id == opts.id then
 		clear_expanded_claim()
@@ -264,6 +291,34 @@ function M.delete_claim(opts)
 
 	state.save(config.get(), ctx.notify)
 	ctx.refresh_ui(opts.bufnr)
+end
+
+function M.undo_deleted_claim()
+	local session_name = state.active_session_name()
+	if not session_name then
+		ctx.notify("No active doubt session", vim.log.levels.INFO)
+		return
+	end
+
+	local session_source = state.active_session_source()
+	local workspace_key = ctx.normalize_path(vim.fn.getcwd())
+	for idx = #deleted_claim_stack, 1, -1 do
+		local entry = deleted_claim_stack[idx]
+		if entry.session_name == session_name and entry.session_source == session_source and entry.workspace_key == workspace_key then
+			table.remove(deleted_claim_stack, idx)
+			local file_state = state.ensure_file_entry(entry.path)
+			if file_state and entry.claim and not state.find_claim(entry.path, entry.claim.id) then
+				table.insert(file_state.claims, vim.deepcopy(entry.claim))
+				claims.sort_claims(file_state.claims)
+				state.save(config.get(), ctx.notify)
+				ctx.refresh_ui()
+				ctx.notify("Restored deleted doubt claim")
+				return
+			end
+		end
+	end
+
+	ctx.notify("No recently deleted claim to restore", vim.log.levels.INFO)
 end
 
 function M.delete_nearest_claim(opts)
@@ -1140,6 +1195,7 @@ end
 
 function M.setup(opts)
 	ctx.api = M
+	deleted_claim_stack = {}
 	clear_live_edit_timers()
 	config.setup(opts)
 	config.set_highlights()

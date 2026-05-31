@@ -110,5 +110,8 @@ vim.api.nvim_win_set_cursor(0, { 1, 3 })
 vim.cmd("DoubtClaimDelete")
 t.assert_eq(state.find_claim(path, "tight"), nil, "claim delete should remove the nearest claim")
 t.assert_eq(state.find_claim(path, "wide") ~= nil, true, "claim delete should keep other claims intact")
+
+doubt.undo_deleted_claim()
+t.assert_eq(state.find_claim(path, "tight") ~= nil, true, "undo delete should restore the most recently deleted claim")
 	end)
 end)

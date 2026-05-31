@@ -108,6 +108,7 @@ local DEFAULTS = {
 		reject = "<leader>Dr",
 		claims = {},
 		delete_claim = "<leader>Dd",
+		undo_delete_claim = "<leader>Du",
 		edit_kind = "<leader>Dk",
 		edit_note = "<leader>Dm",
 		toggle_claim = "<leader>Dt",

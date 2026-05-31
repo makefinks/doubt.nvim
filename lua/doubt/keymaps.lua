@@ -10,6 +10,7 @@ local DEFAULT_DESC = {
 	export_picker = "Pick a doubt export template for agent handoff",
 	agent_instructions = "Copy doubt agent review instructions",
 	delete_claim = "Delete doubt claim nearest to cursor",
+	undo_delete_claim = "Restore most recently deleted doubt claim",
 	edit_kind = "Change doubt claim kind nearest to cursor",
 	edit_note = "Change doubt claim note nearest to cursor",
 	toggle_claim = "Toggle doubt claim note nearest to cursor",
@@ -81,6 +82,12 @@ function M.register(api, opts)
 		set_keymap("delete_claim", "n", opts.delete_claim, function()
 			api.delete_nearest_claim()
 		end, DEFAULT_DESC.delete_claim)
+	end
+
+	if opts.undo_delete_claim then
+		set_keymap("undo_delete_claim", "n", opts.undo_delete_claim, function()
+			api.undo_deleted_claim()
+		end, DEFAULT_DESC.undo_delete_claim)
 	end
 
 	if opts.edit_kind then

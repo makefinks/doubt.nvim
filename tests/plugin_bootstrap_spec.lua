@@ -23,6 +23,9 @@ t.assert_eq(concern_map.desc, "Flag concern on current line or selection", "plug
 local delete_claim_map = vim.fn.maparg("<leader>Dd", "n", false, true)
 t.assert_eq(delete_claim_map.desc, "Delete doubt claim nearest to cursor", "plugin bootstrap should install the nearest-claim delete keymap")
 
+local undo_delete_claim_map = vim.fn.maparg("<leader>Du", "n", false, true)
+t.assert_eq(undo_delete_claim_map.desc, "Restore most recently deleted doubt claim", "plugin bootstrap should install the undo-delete keymap")
+
 local edit_kind_map = vim.fn.maparg("<leader>Dk", "n", false, true)
 t.assert_eq(edit_kind_map.desc, "Change doubt claim kind nearest to cursor", "plugin bootstrap should install the nearest-claim kind keymap")
 
@@ -54,6 +57,7 @@ doubt.setup({
 t.assert_eq(vim.fn.maparg("<leader>De", "n"), "", "re-running setup should remove default keymaps when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dc", "n"), "", "re-running setup should remove the concern keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dd", "n"), "", "re-running setup should remove the delete-claim keymap when disabled")
+t.assert_eq(vim.fn.maparg("<leader>Du", "n"), "", "re-running setup should remove the undo-delete keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dk", "n"), "", "re-running setup should remove the edit-kind keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dm", "n"), "", "re-running setup should remove the edit-note keymap when disabled")
 t.assert_eq(vim.fn.maparg("<leader>Dt", "n"), "", "re-running setup should remove the toggle keymap when disabled")
