@@ -278,7 +278,7 @@ require("doubt").setup({
   },
   inline_notes = {
     enabled = true,
-    max_width = 60,
+    max_width = 80,
     prefix = "",
     padding_right = 2,
   },
@@ -321,6 +321,8 @@ This lets you wrap the raw XML in agent-specific instructions without changing t
 
 Custom claim kinds are configured through `claim_kinds`, plus matching `input.prompts`, `signs`, and optional `keymaps.claims` entries.
 Each kind gets a generic `:DoubtClaim <kind>` path. If you define a kind like: `command = "Blocker"`, it also registers `:DoubtBlocker` automatically.
+
+`inline_notes.max_width` controls both the collapsed note truncation cutoff and expanded note wrap width. Increase it if claim notes hide too early, or set it to `0` to disable width-based truncation/wrapping.
 
 ```lua
 require("doubt").setup({

@@ -163,6 +163,11 @@ function M.ask_note(opts, callback)
 	local anchor_line = math.max(tonumber(opts.line) or 0, 0)
 	local anchor_col = math.max(tonumber(opts.col) or 0, 0)
 	local width = note_editor_width(opts)
+	local height = clamp(math.floor(tonumber(opts.height) or 3), 1, math.max(vim.o.lines - 4, 1))
+	local wrap_at = tonumber(opts.wrap_at)
+	if wrap_at == nil then
+		wrap_at = width - 1
+	end
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	local winid = vim.api.nvim_open_win(bufnr, true, {
 		relative = "win",
@@ -173,7 +178,7 @@ function M.ask_note(opts, callback)
 		style = "minimal",
 		border = opts.border or "rounded",
 		width = width,
-		height = 1,
+		height = height,
 		title = opts.prompt or opts.title or "Edit note",
 		title_pos = "left",
 	})
@@ -190,6 +195,12 @@ function M.ask_note(opts, callback)
 	vim.bo[bufnr].omnifunc = ""
 	vim.bo[bufnr].completefunc = ""
 	vim.b[bufnr].completion = false
+	if wrap_at > 0 then
+		vim.bo[bufnr].textwidth = math.max(math.floor(wrap_at), 1)
+		if not vim.bo[bufnr].formatoptions:find("t", 1, true) then
+			vim.bo[bufnr].formatoptions = vim.bo[bufnr].formatoptions .. "t"
+		end
+	end
 	vim.wo[winid].wrap = false
 	vim.wo[winid].number = false
 	vim.wo[winid].relativenumber = false
