@@ -50,10 +50,10 @@ if [[ "$#" -eq 0 ]]; then
 	success=0
 	failed=0
 	errors=0
-	declare -a file_names
-	declare -a file_passed
-	declare -a file_failed
-	declare -a file_errored
+	file_names=()
+	file_passed=()
+	file_failed=()
+	file_errored=()
 	current_file_index=-1
 
 	trim_whitespace() {
