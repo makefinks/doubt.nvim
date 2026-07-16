@@ -1,6 +1,8 @@
 # doubt.nvim
 
-![Screenshot showing doubt.nvim in action with claims highlighted in code and displayed in the side panel](assets/claim-demo.png)
+<p align="center">
+	<img src="assets/doubt-hero.png" alt="A skeptical detective reviewing suspicious AI-generated code" width="85%">
+</p>
 
 `doubt.nvim` is a Neovim plugin for reviewing (AI-generated) code with a focus on inline comments and persistent sessions.
 It helps you mark questionable, risky, or incorrect parts of code directly in the buffer, so review findings stay visible and actionable.
@@ -24,6 +26,10 @@ Review state is session-based, so findings persist across review passes.
 
 Even if you or an AI edit the file, claim line references are updated automatically.
 If the code marked by a claim changes, the claim is marked as stale and excluded from exports until it is updated.
+
+## Usage
+
+![Screenshot showing doubt.nvim in action with claims highlighted in code and displayed in the side panel](assets/claim-demo.png)
 
 ## Why it was built
 
