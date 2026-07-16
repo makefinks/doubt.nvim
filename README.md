@@ -112,6 +112,7 @@ Workspace session management:
 
 Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`, and `:DoubtClaim <kind>` operate on the current line. With a visual or Ex range, they use that range instead.
 If you omit `[note]`, an inline note popup asks for one.
+Type `@` in the note popup to reference a project file. In Git repositories, the picker lists tracked and non-ignored untracked files from the repository root; elsewhere, it scans the current working directory. The picker uses `vim.ui.select`, so any configured UI selector can provide the interface without being a doubt.nvim dependency.
 
 `:DoubtExport` copies the active session to the configured register using the default export template, or a named template override when you pass one. It exports only trusted claims (`fresh`/`reanchored`) and reports skipped stale claims.
 

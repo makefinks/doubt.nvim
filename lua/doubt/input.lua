@@ -36,7 +36,7 @@ end
 
 local function relative_path(path, root)
 	path = vim.fs.normalize(path)
-	root = vim.fs.normalize(root or vim.uv.cwd() or ".")
+	root = vim.fs.normalize(root or vim.fn.getcwd())
 
 	local prefix = root .. "/"
 	if path:sub(1, #prefix) == prefix then
@@ -54,15 +54,55 @@ local function should_skip_file_path(path)
 		or normalized:match("/%.DS_Store$")
 end
 
-local function workspace_files(root, limit)
-	root = vim.fs.normalize(root or vim.uv.cwd() or ".")
-	limit = math.max(tonumber(limit) or 500, 1)
+local function git_files(root)
+	if vim.fn.executable("git") ~= 1 then
+		return nil
+	end
 
-	local files = vim.fs.find(function(name, path)
+	local git_root = vim.fs.root(root, ".git")
+	if not git_root then
+		return nil
+	end
+
+	local ok, process = pcall(vim.system, {
+		"git",
+		"-C",
+		git_root,
+		"ls-files",
+		"--cached",
+		"--others",
+		"--exclude-standard",
+		"-z",
+	}, { text = false })
+	if not ok then
+		return nil
+	end
+
+	local result = process:wait()
+	if result.code ~= 0 then
+		return nil
+	end
+
+	local files = vim.split(result.stdout or "", "\0", { plain = true, trimempty = true })
+	for index, path in ipairs(files) do
+		files[index] = vim.fs.normalize(path)
+	end
+	table.sort(files)
+	return files
+end
+
+local function workspace_files(root)
+	root = vim.fs.normalize(root or vim.fn.getcwd())
+	local files = git_files(root)
+	if files then
+		return files
+	end
+
+	files = vim.fs.find(function(name, path)
 		local full_path = vim.fs.joinpath(path, name)
 		return not should_skip_file_path(full_path)
 	end, {
-		limit = limit,
+		limit = math.huge,
 		path = root,
 		type = "file",
 	})
@@ -160,6 +200,7 @@ end
 
 function M.ask_note(opts, callback)
 	opts = opts or {}
+	local file_root = opts.root or opts.cwd or vim.fn.getcwd()
 	local anchor_line = math.max(tonumber(opts.line) or 0, 0)
 	local anchor_col = math.max(tonumber(opts.col) or 0, 0)
 	local width = note_editor_width(opts)
@@ -257,7 +298,7 @@ function M.ask_note(opts, callback)
 
 	local function pick_file_reference()
 		local insert_position = vim.api.nvim_win_get_cursor(winid)
-		local files = opts.files or workspace_files(opts.root or opts.cwd, opts.file_limit)
+		local files = opts.files or workspace_files(file_root)
 		if vim.tbl_isempty(files) then
 			vim.notify("No files found to reference", vim.log.levels.INFO, { title = "doubt.nvim" })
 			return
@@ -265,6 +306,7 @@ function M.ask_note(opts, callback)
 
 		picker_open = true
 		vim.ui.select(files, {
+			kind = "file",
 			prompt = opts.file_prompt or "Reference file",
 		}, function(path)
 			picker_open = false

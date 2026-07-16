@@ -84,10 +84,12 @@ vim.cmd = original_cmd
 local original_select = vim.ui.select
 local selected_items = nil
 local selected_prompt = nil
+local selected_kind = nil
 local select_callback = nil
 vim.ui.select = function(items, opts, callback)
 	selected_items = items
 	selected_prompt = opts.prompt
+	selected_kind = opts.kind
 	select_callback = callback
 end
 
@@ -104,6 +106,7 @@ vim.api.nvim_win_set_cursor(reference_note.winid, { 1, 0 })
 select_callback(selected_items[2])
 
 t.assert_eq(selected_prompt, "Reference file", "file reference picker should use a clear prompt")
+t.assert_eq(selected_kind, "file", "file reference picker should identify its item kind")
 t.assert_eq(selected_items, { "lua/doubt/init.lua", "lua/doubt/input.lua" }, "file picker should receive candidate paths")
 t.assert_eq(
 	vim.api.nvim_buf_get_lines(reference_note.bufnr, 0, -1, false)[1],
