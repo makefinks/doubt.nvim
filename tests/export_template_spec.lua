@@ -51,10 +51,10 @@ t.assert_match(
 	"Fetch every referenced file and line from the repository before performing claim specific actions%.",
 	"review should tell the downstream agent to fetch the referenced code first"
 )
-t.assert_match(
-	review_text,
-	"give a concise implementation summary without repeating a claim%-by%-claim report%.",
-	"review should rely on the manifest instead of requesting a duplicate per-claim response"
+	t.assert_match(
+		review_text,
+		"After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim%-by%-claim report%.",
+		"review should request a final textual summary after the manifest without duplicating per-claim responses"
 )
 t.assert_eq(review_text:match("Respond with one section per claim"), nil, "review should not request decorative per-claim output")
 t.assert_match(
@@ -83,10 +83,10 @@ t.assert_match(
 	"Triage each claim and delegate explanation or revision work as needed%.",
 	"multi_agent should include the triage guidance"
 )
-t.assert_match(
-	multi_agent_text,
-	"Give a concise implementation summary without repeating a claim%-by%-claim report%.",
-	"multi_agent should rely on the manifest instead of duplicating each result"
+	t.assert_match(
+		multi_agent_text,
+		"After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim%-by%-claim report%.",
+		"multi_agent should request a final textual summary after the manifest without duplicating each result"
 )
 t.assert_eq(multi_agent_text:match("include one section per claim"), nil, "multi_agent should not request decorative per-claim output")
 t.assert_match(
