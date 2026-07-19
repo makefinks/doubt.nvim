@@ -53,6 +53,12 @@ t.assert_match(
 )
 t.assert_match(
 	review_text,
+	"give a concise implementation summary without repeating a claim%-by%-claim report%.",
+	"review should rely on the manifest instead of requesting a duplicate per-claim response"
+)
+t.assert_eq(review_text:match("Respond with one section per claim"), nil, "review should not request decorative per-claim output")
+t.assert_match(
+	review_text,
 	'<instruction kind="question">Explain the code and address the feedback without modifying the code%.</instruction>',
 	"review should include the instruction-aware xml payload"
 )
@@ -74,9 +80,15 @@ t.assert_match(
 )
 t.assert_match(
 	multi_agent_text,
-	"Triage each claim, delegate explanation or revision work as needed, and return one consolidated response%.",
+	"Triage each claim and delegate explanation or revision work as needed%.",
 	"multi_agent should include the triage guidance"
 )
+t.assert_match(
+	multi_agent_text,
+	"Give a concise implementation summary without repeating a claim%-by%-claim report%.",
+	"multi_agent should rely on the manifest instead of duplicating each result"
+)
+t.assert_eq(multi_agent_text:match("include one section per claim"), nil, "multi_agent should not request decorative per-claim output")
 t.assert_match(
 	multi_agent_text,
 	'<instruction kind="question">Explain the code and address the feedback without modifying the code%.</instruction>',

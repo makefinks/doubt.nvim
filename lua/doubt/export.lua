@@ -13,9 +13,14 @@ local function xml_escape(value)
 	return value
 end
 
-local function xml_line(claim)
+local function xml_line(claim, review_run)
+	local id_line = ""
+	if review_run and type(claim.id) == "string" and claim.id ~= "" then
+		id_line = string.format('    id="%s"\n', xml_escape(claim.id))
+	end
 	return string.format(
-		'  <claim\n    kind="%s"\n    start_line="%d"\n    start_col="%d"\n    end_line="%d"\n    end_col="%d"\n    note="%s"\n  />',
+		'  <claim\n%s    kind="%s"\n    start_line="%d"\n    start_col="%d"\n    end_line="%d"\n    end_col="%d"\n    note="%s"\n  />',
+		id_line,
 		xml_escape(claim.kind),
 		math.max(tonumber(claim.start_line) or 0, 0) + 1,
 		math.max(tonumber(claim.start_col) or 0, 0),
@@ -153,19 +158,28 @@ function M.list_template_names(export_config)
 	return names
 end
 
-function M.build_session_xml(session_name, files, export_config)
+function M.build_session_xml(session_name, files, export_config, review_run)
 	if type(session_name) ~= "string" or vim.trim(session_name) == "" then
 		return nil
 	end
 
 	files = type(files) == "table" and files or {}
 	export_config = resolve_export_config(export_config)
-	if vim.tbl_isempty(files) then
+	if vim.tbl_isempty(files) and not review_run then
 		return string.format('<doubt session="%s"></doubt>', xml_escape(session_name))
 	end
 
+	local root_line = string.format('<doubt session="%s">', xml_escape(session_name))
+	if review_run then
+		root_line = string.format(
+			'<doubt session="%s" run_id="%s" manifest_path="%s">',
+			xml_escape(session_name),
+			xml_escape(review_run.run_id),
+			xml_escape(review_run.manifest_path)
+		)
+	end
 	local lines = {
-		string.format('<doubt session="%s">', xml_escape(session_name)),
+		root_line,
 	}
 	local paths = vim.tbl_keys(files)
 	table.sort(paths)
@@ -175,7 +189,7 @@ function M.build_session_xml(session_name, files, export_config)
 		table.insert(lines, string.format('  <file path="%s">', xml_escape(path)))
 
 		for _, claim in ipairs((files[path] or {}).claims or {}) do
-			table.insert(lines, xml_line(claim))
+			table.insert(lines, xml_line(claim, review_run))
 		end
 
 		table.insert(lines, "  </file>")
@@ -222,7 +236,7 @@ function M.build_export_text(opts)
 		return nil, string.format("Unknown doubt export template: %s", template_name)
 	end
 
-	local xml = opts.xml or M.build_session_xml(opts.session_name, opts.files, export_config)
+	local xml = opts.xml or M.build_session_xml(opts.session_name, opts.files, export_config, opts.review_run)
 	if not xml then
 		return nil, "Unable to export doubt session"
 	end
@@ -231,12 +245,18 @@ function M.build_export_text(opts)
 	local payload = {
 		claim_count = count_claims(files),
 		file_count = vim.tbl_count(files),
+		manifest_path = opts.review_run and opts.review_run.manifest_path or "",
+		run_id = opts.review_run and opts.review_run.run_id or "",
 		session = opts.session_name,
 		session_name = opts.session_name,
 		xml = xml,
 	}
 
-	return render_template(template, payload), nil, template_name
+	local text = render_template(template, payload)
+	if opts.review_run and type(opts.review_run.protocol_text) == "string" and opts.review_run.protocol_text ~= "" then
+		text = text .. "\n\n" .. opts.review_run.protocol_text
+	end
+	return text, nil, template_name
 end
 
 return M

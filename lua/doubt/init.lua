@@ -5,6 +5,7 @@ local context = require("doubt.app.context")
 local session_ui = require("doubt.app.session_ui")
 local commands = require("doubt.commands")
 local config = require("doubt.config")
+local diff_viewer = require("doubt.diff_viewer")
 local export = require("doubt.export")
 local healthcheck = require("doubt.healthcheck")
 local input = require("doubt.input")
@@ -12,6 +13,7 @@ local keymaps = require("doubt.keymaps")
 local panel = require("doubt.panel")
 local preferences = require("doubt.preferences")
 local render = require("doubt.render")
+local review_runs = require("doubt.review_runs")
 local state = require("doubt.state")
 
 local M = {}
@@ -23,6 +25,7 @@ local ctx = context.new({
 	config = config,
 	panel = panel,
 	render = render,
+	review_runs = review_runs,
 	state = state,
 })
 
@@ -502,7 +505,54 @@ function M.clear_focused_claim()
 end
 
 function M.open_panel()
+	ctx.refresh_review_run_inspection()
 	panel.open(ctx)
+end
+
+function M.open_claim_diff(opts)
+	opts = opts or {}
+	if not state.has_active_session() then
+		ctx.notify("No active doubt session", vim.log.levels.INFO)
+		return
+	end
+	if type(opts.id) ~= "string" or opts.id == "" or type(opts.path) ~= "string" then
+		ctx.notify("Select a doubt claim to inspect its changes", vim.log.levels.INFO)
+		return
+	end
+	if not state.find_claim(opts.path, opts.id) then
+		ctx.notify("Unable to find the selected doubt claim", vim.log.levels.WARN)
+		return
+	end
+
+	local result, err = review_runs.claim_diff({
+		claim_id = opts.id,
+		session_name = state.active_session_name(),
+		session_source = state.active_session_source(),
+		workspace = vim.fn.getcwd(),
+	})
+	if not result then
+		ctx.notify(err, vim.log.levels.INFO)
+		return
+	end
+
+	local opened, viewer_error = diff_viewer.open({
+		claim_id = opts.id,
+		notify = ctx.notify,
+		result = result,
+		viewer = (config.get().review_runs or {}).diff_viewer,
+	})
+	if not opened then
+		ctx.notify(viewer_error or "Unable to open doubt claim diff", vim.log.levels.WARN)
+		return
+	end
+	if result.unattributed_count > 0 then
+		ctx.notify(string.format(
+			"Opened claim diff; %d review-run %s remain unattributed",
+			result.unattributed_count,
+			result.unattributed_count == 1 and "hunk" or "hunks"
+		), vim.log.levels.WARN)
+	end
+	return result
 end
 
 local function refresh_active_session_claims()
@@ -516,6 +566,7 @@ end
 
 function M.refresh()
 	refresh_active_session_claims()
+	ctx.refresh_review_run_inspection()
 	ctx.refresh_ui()
 end
 
@@ -548,6 +599,19 @@ local function build_export_payload(opts)
 	end
 
 	local xml = export.build_session_xml(session_name, export_files)
+	local review_run = nil
+	if opts.create_review_run and export_stats.exportable_claim_count > 0 then
+		review_run = review_runs.create({
+			files = export_files,
+			session_name = session_name,
+			session_source = state.active_session_source(),
+			workspace = vim.fn.getcwd(),
+		})
+		if review_run then
+			review_run.protocol_text = review_runs.protocol_text(review_run)
+			xml = export.build_session_xml(session_name, export_files, nil, review_run)
+		end
+	end
 	if not xml then
 		ctx.notify("Unable to export doubt session", vim.log.levels.WARN)
 		return nil
@@ -556,6 +620,7 @@ local function build_export_payload(opts)
 	local text, err, template_name = export.build_export_text({
 		export_config = config.get().export,
 		files = export_files,
+		review_run = review_run,
 		session_name = session_name,
 		template = opts.template,
 		xml = xml,
@@ -572,6 +637,7 @@ local function build_export_payload(opts)
 		files = files,
 		export_files = export_files,
 		template_name = template_name,
+		review_run = review_run,
 		text = text,
 		xml = xml,
 	}
@@ -599,6 +665,7 @@ end
 function M.copy_export(opts)
 	opts = opts or {}
 	local payload = build_export_payload(vim.tbl_extend("force", opts, {
+		create_review_run = true,
 		trusted_only = true,
 	}))
 	if not payload then
@@ -1202,6 +1269,7 @@ function M.setup(opts)
 	claims.configure(config.get().claim_kinds)
 	local workspace = ctx.normalize_path(vim.fn.getcwd())
 	state.load(config.get(), ctx.normalize_path, ctx.notify, workspace)
+	ctx.invalidate_review_run_inspection()
 	ctx.set_inline_notes_layout(preferences.load(config.get(), ctx.notify).inline_notes_layout or "block")
 	vim.api.nvim_clear_autocmds({ group = ctx.augroup })
 
@@ -1225,6 +1293,14 @@ function M.setup(opts)
 		group = ctx.augroup,
 		callback = function(args)
 			schedule_live_edit_refresh(args.buf)
+		end,
+	})
+
+	-- Git baselines reflect files on disk, so update claim-diff status after writes rather than every keystroke.
+	vim.api.nvim_create_autocmd("BufWritePost", {
+		group = ctx.augroup,
+		callback = function()
+			ctx.invalidate_review_run_inspection()
 		end,
 	})
 

@@ -13,6 +13,9 @@ function M.new(deps)
 		focused_claim = nil,
 		inline_notes_layout_name = "block",
 		live_edit_timers = {},
+		review_runs = deps.review_runs,
+		review_run_cache = nil,
+		review_run_cache_key = nil,
 	}
 
 	function ctx.stop_live_edit_timer(bufnr)
@@ -144,6 +147,51 @@ function M.new(deps)
 	function ctx.current_path(bufnr)
 		bufnr = bufnr or vim.api.nvim_get_current_buf()
 		return ctx.normalize_path(vim.api.nvim_buf_get_name(bufnr))
+	end
+
+	local function active_review_run_key()
+		local session_name = deps.state.active_session_name()
+		if not session_name then
+			return nil
+		end
+		return string.format(
+			"%s:%s:%s",
+			vim.fs.normalize(vim.fn.getcwd()),
+			deps.state.active_session_source() or "local",
+			session_name
+		)
+	end
+
+	function ctx.refresh_review_run_inspection()
+		if not deps.review_runs or not deps.state.active_session_name() then
+			ctx.review_run_cache = nil
+			ctx.review_run_cache_key = nil
+			return nil
+		end
+		ctx.review_run_cache = deps.review_runs.inspect({
+			session_name = deps.state.active_session_name(),
+			session_source = deps.state.active_session_source(),
+			workspace = vim.fn.getcwd(),
+		})
+		ctx.review_run_cache_key = active_review_run_key()
+		return ctx.review_run_cache
+	end
+
+	function ctx.invalidate_review_run_inspection()
+		ctx.review_run_cache = nil
+		ctx.review_run_cache_key = nil
+	end
+
+	function ctx.review_run_inspection()
+		if ctx.review_run_cache_key ~= active_review_run_key() then
+			return ctx.refresh_review_run_inspection()
+		end
+		return ctx.review_run_cache
+	end
+
+	function ctx.claim_review_status(claim_id)
+		local inspection = ctx.review_run_inspection()
+		return inspection and inspection.statuses and inspection.statuses[claim_id] or nil
 	end
 
 	function ctx.refresh_ui(bufnr)

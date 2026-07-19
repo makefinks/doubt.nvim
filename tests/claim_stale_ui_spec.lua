@@ -115,6 +115,35 @@ local stale_inline_text = virt_line_text(stale_sign.virt_lines[2])
 t.assert_match(stale_inline_text, "%[stale%]", "inline inspection should keep stale marker text readable in place")
 t.assert_match(stale_inline_text, "stale note", "inline inspection should keep stale note text readable in place")
 
+render_ctx.claim_review_status = function(id)
+	if id == "stale-claim" then
+		return {
+			addressed = true,
+			outcome = "changed",
+			summary = "Updated the implementation.",
+		}
+	end
+end
+render.clear_buffer_claims(render_ctx, bufnr)
+render.render_claim(render_ctx, bufnr, file_state.claims[2])
+
+local addressed_sign
+local addressed_stale_range
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, render_ctx.ns, 0, -1, { details = true })) do
+	local details = mark[4] or {}
+	if details.hl_group == "DoubtStaleQuestion" then
+		addressed_stale_range = details
+	end
+	if details.sign_text and vim.startswith(details.sign_text, claims.meta("question").sign) then
+		addressed_sign = details
+	end
+end
+t.assert_eq(addressed_stale_range, nil, "addressed claims should not retain stale range styling")
+t.assert_eq(addressed_sign.sign_hl_group, claims.meta("question").hl, "addressed claims should use their normal kind styling")
+local addressed_inline_text = virt_line_text(addressed_sign.virt_lines[2])
+t.assert_match(addressed_inline_text, "%[addressed: changed%]", "source annotations should expose the agent decision")
+t.assert_eq(addressed_inline_text:match("%[stale%]"), nil, "addressed source annotations should suppress stale markers")
+
 local lines = panel.build_lines({
 	config = require("doubt.config"),
 	state = state,

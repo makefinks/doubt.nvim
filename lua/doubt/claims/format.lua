@@ -11,8 +11,9 @@ function M.freshness_marker(claim)
 	return FRESHNESS_MARKERS[(claim or {}).freshness]
 end
 
-local function display_note(claim)
-	local marker = M.freshness_marker(claim)
+local function display_note(claim, opts)
+	opts = opts or {}
+	local marker = not opts.hide_freshness and M.freshness_marker(claim) or nil
 	local note = claim.note ~= "" and claim.note or kinds.default_note(claim.kind)
 	if marker then
 		return string.format("%s %s", marker, note)
@@ -36,9 +37,9 @@ function M.claim_summary(claim)
 	)
 end
 
-function M.inline_text(claim)
+function M.inline_text(claim, opts)
 	local meta = kinds.meta(claim.kind)
-	return meta.inline_label, display_note(claim)
+	return meta.inline_label, display_note(claim, opts)
 end
 
 return M

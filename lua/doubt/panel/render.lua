@@ -121,7 +121,7 @@ function M.render(ctx)
 
 	vim.api.nvim_buf_clear_namespace(panel_state.bufnr, ctx.ns, 0, -1)
 	for idx, item in ipairs(panel_state.lines) do
-		local base_hl = ({
+		local base_hl = item.line_hl_group or ({
 			title = "DoubtPanelTitle",
 			section = "DoubtPanelSection",
 			muted = "DoubtPanelMuted",

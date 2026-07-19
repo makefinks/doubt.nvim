@@ -31,6 +31,7 @@ local function build_help_content()
 			title = "Manage",
 			bindings = {
 				{ "d", "Delete selected item" },
+				{ "D", "Open selected claim changes" },
 				{ "R", "Rename selected session" },
 				{ "r", "Refresh panel" },
 				{ "?", "Open this help" },

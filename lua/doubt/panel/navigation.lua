@@ -132,6 +132,19 @@ function M.delete_line(ctx)
 	end
 end
 
+function M.open_diff_line(ctx)
+	local panel_state = state_mod.panel_state
+	local line = vim.api.nvim_win_get_cursor(0)[1]
+	local item = panel_state.lines[line]
+	if not item or item.kind ~= "claim" or not item.path or not item.id then
+		return
+	end
+	ctx.api.open_claim_diff({
+		path = item.path,
+		id = item.id,
+	})
+end
+
 function M.close_help_then(fn)
 	return function()
 		help.close_help()

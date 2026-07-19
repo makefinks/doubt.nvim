@@ -116,6 +116,8 @@ Type `@` in the note popup to reference a project file. In Git repositories, the
 
 `:DoubtExport` copies the active session to the configured register using the default export template, or a named template override when you pass one. It exports only trusted claims (`fresh`/`reanchored`) and reports skipped stale claims.
 
+In a Git repository, `:DoubtExport` also creates a review-run checkpoint. The checkpoint represents the exact working tree at handoff time, including existing uncommitted and untracked non-ignored files, without changing the real index or current branch. The payload gives every claim a stable ID and tells the agent where to write its claim-to-change manifest.
+
 `:DoubtExportFilter` opens a separate command-only picker, lets you choose which claim kinds to include, and then copies raw XML for just those selected kinds.
 
 Built-in templates:
@@ -129,6 +131,12 @@ Template names are exposed as command completion so custom handoff wrappers stay
 `:DoubtExportXml` opens the full active session as compact XML grouped by file into a scratch XML buffer when you want to inspect the raw export.
 
 `:DoubtAgentInstructionsCopy` copies instructions for agents that should write review findings directly into a repo-local workspace session.
+
+### Claim-scoped agent diffs
+
+After an agent handles an exported review, refresh or reopen `:DoubtPanel` to see its response beneath each claim. The panel distinguishes completed changes, answers, rejected concerns, and unresolved feedback while warning about changes that could not be matched to a claim.
+
+For claims with verified changes, press `D` to inspect only the relevant diff. doubt.nvim can use CodeDiff, Diffview, or its built-in diff view; choose a preferred viewer with `review_runs.diff_viewer` in the configuration below. Claim-scoped diffs are available when exporting from a Git repository.
 
 ### Agent-written workspace sessions
 
@@ -183,6 +191,8 @@ Use `:DoubtAgentInstructionsCopy` or `<leader>Da` to copy the exact instructions
 - `<leader>Dx` stop the active session
 - `<leader>Df` refresh decorations and panel state
 
+Inside the panel, press `D` on a claim to open the agent-attributed changes from the run that most recently included that claim.
+
 Set `keymaps = false` to disable all defaults, or disable individual entries one by one.
 
 ## Configuration
@@ -204,37 +214,18 @@ require("doubt").setup({
       review = table.concat({
         "The reviewer has provided feedback for the code in the xml below.",
         "Fetch every referenced file and line from the repository before performing claim specific actions.",
+        "Address the claims, then give a concise implementation summary without repeating a claim-by-claim report.",
         "",
         "{{xml}}",
-        "",
-        "Respond with one section per claim, in the order they appear above. For each claim:",
-        "- Start with a box header like this (fixed 40 characters wide, using box-drawing characters). After CLAIM N, add a max-4-word summary of the claim, padded with spaces so the closing | stays at column 40:",
-        "┌────────────────────────────────────────┐",
-        "│ CLAIM 1  nil guard missing             │",
-        "└────────────────────────────────────────┘",
-        "- List `File`, `Lines`, `Kind`, and `Note` on separate lines.",
-        "- Include the relevant code from the file as a fenced code block, with a `---` horizontal rule above and below it.",
-        "- For claims that require code changes, include a unified diff of the proposed change when it fits in 15 lines; otherwise show the original code block as above and summarize the change.",
-        "- Then give your response.",
       }, "\n"),
       multi_agent = table.concat({
         "You are coordinating a response to feedback the reviewer has provided.",
         "Fetch every referenced file and line from the repository before assigning claim specific work.",
-        "Triage each claim, delegate explanation or revision work as needed, and return one consolidated response.",
+        "Triage each claim and delegate explanation or revision work as needed.",
         "You should act as a coordinator that delegates work and consolidates the individual responses from subagents into a final response for the user.",
+        "Give a concise implementation summary without repeating a claim-by-claim report.",
         "",
         "{{xml}}",
-        "",
-        "In the final consolidated response, include one section per claim in the order above. For each claim:",
-        "- Start with a box header like this (fixed 40 characters wide, using box-drawing characters). After CLAIM N, add a max-4-word summary of the claim, padded with spaces so the closing | stays at column 40:",
-        "┌────────────────────────────────────────┐",
-        "│ CLAIM 1  nil guard missing             │",
-        "└────────────────────────────────────────┘",
-        "- List `File`, `Lines`, `Kind`, and `Note` on separate lines.",
-        "- Include the relevant code from the file as a fenced code block, with a `---` horizontal rule above and below it.",
-        "- For claims that require code changes, include a unified diff of the proposed change when it fits in 15 lines; otherwise show the original code block as above and summarize the change.",
-        "- Then give the response.",
-        "If you delegate work, require subagents to preserve the exact claim identifiers in their responses.",
       }, "\n"),
     },
   },
@@ -313,6 +304,9 @@ require("doubt").setup({
   panel = {
     width = 56,
     side = "right",
+  },
+  review_runs = {
+    diff_viewer = "auto",
   },
   state_path = vim.fs.joinpath(vim.fn.stdpath("state"), "doubt.nvim.json"),
   signs = {

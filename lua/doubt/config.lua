@@ -14,37 +14,20 @@ local DEFAULTS = {
 			review = table.concat({
 				"The reviewer has provided feedback for the code in the xml below.",
 				"Fetch every referenced file and line from the repository before performing claim specific actions.",
+				"Address the claims, then give a concise implementation summary without repeating a claim-by-claim report.",
+				"Your summary must include concrete reasoning: what you investigated, what you found, why you made each decision, and what you changed. The summary is presented to the reviewer as your response for each claim.",
 				"",
 				"{{xml}}",
-				"",
-				"Respond with one section per claim, in the order they appear above. For each claim:",
-				"- Start with a box header like this (fixed 40 characters wide, using box-drawing characters). After CLAIM N, add a max-4-word summary of the claim, padded with spaces so the closing | stays at column 40:",
-				"┌────────────────────────────────────────┐",
-				"│ CLAIM 1  nil guard missing             │",
-				"└────────────────────────────────────────┘",
-				"- List `File`, `Lines`, `Kind`, and `Note` on separate lines.",
-				"- Include the relevant code from the file as a fenced code block, with a `---` horizontal rule above and below it.",
-				"- For claims that require code changes, include a unified diff of the proposed change when it fits in 15 lines; otherwise show the original code block as above and summarize the change.",
-				"- Then give your response.",
 			}, "\n"),
 			multi_agent = table.concat({
 				"You are coordinating a response to feedback the reviewer has provided.",
 				"Fetch every referenced file and line from the repository before assigning claim specific work.",
-				"Triage each claim, delegate explanation or revision work as needed, and return one consolidated response.",
+				"Triage each claim and delegate explanation or revision work as needed.",
 				"You should act as a coordinator that delegates work and consolidates the individual responses from subagents into a final response for the user.",
+				"Give a concise implementation summary without repeating a claim-by-claim report.",
+				"Your summary must include concrete reasoning: what was investigated, what was found, why each decision was made, and what was changed. The summary is presented to the reviewer as your response for each claim.",
 				"",
 				"{{xml}}",
-				"",
-				"In the final consolidated response, include one section per claim in the order above. For each claim:",
-				"- Start with a box header like this (fixed 40 characters wide, using box-drawing characters). After CLAIM N, add a max-4-word summary of the claim, padded with spaces so the closing | stays at column 40:",
-				"┌────────────────────────────────────────┐",
-				"│ CLAIM 1  nil guard missing             │",
-				"└────────────────────────────────────────┘",
-				"- List `File`, `Lines`, `Kind`, and `Note` on separate lines.",
-				"- Include the relevant code from the file as a fenced code block, with a `---` horizontal rule above and below it.",
-				"- For claims that require code changes, include a unified diff of the proposed change when it fits in 15 lines; otherwise show the original code block as above and summarize the change.",
-				"- Then give the response.",
-				"If you delegate work, require subagents to preserve the exact claim identifiers in their responses.",
 			}, "\n"),
 		},
 	},
@@ -126,6 +109,9 @@ local DEFAULTS = {
 	panel = {
 		width = 56,
 		side = "right",
+	},
+	review_runs = {
+		diff_viewer = "auto",
 	},
 	preferences_path = vim.fs.joinpath(vim.fn.stdpath("state"), "doubt.nvim-preferences.json"),
 	state_path = vim.fs.joinpath(vim.fn.stdpath("state"), "doubt.nvim.json"),
@@ -265,6 +251,10 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtPanelKey", { fg = "#FDE68A", bold = true })
 	vim.api.nvim_set_hl(0, "DoubtPanelMuted", { fg = "#7F8794" })
 	vim.api.nvim_set_hl(0, "DoubtPanelStale", { fg = "#D4A373", italic = true })
+	vim.api.nvim_set_hl(0, "DoubtPanelDiff", { fg = "#86EFAC", bold = true })
+	vim.api.nvim_set_hl(0, "DoubtPanelDiffWarning", { fg = "#F6C453", bold = true })
+	vim.api.nvim_set_hl(0, "DoubtPanelAgentResponse", { bg = "#1D2A3A" })
+	vim.api.nvim_set_hl(0, "DoubtPanelAgentResponseWarning", { bg = "#302A3A" })
 	vim.api.nvim_set_hl(0, "DoubtPanelActiveClaim", { bg = "#2A3441" })
 	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownCode", { fg = "#FDE68A", bg = "#1F2937" })
 	vim.api.nvim_set_hl(0, "DoubtPanelMarkdownBold", { fg = "#F8E7A1", bold = true })

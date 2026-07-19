@@ -4,6 +4,10 @@ local M = {}
 local CLAIM_KIND_CELL_WIDTH = 8
 local MARKDOWN_MARKERS = { "`", "**", "__", "~~", "*", "_" }
 
+local function is_addressed(status)
+	return status and status.addressed == true
+end
+
 local function count_claims(files)
 	local total = 0
 	for _, file_state in pairs(files) do
@@ -13,10 +17,10 @@ local function count_claims(files)
 	return total
 end
 
-local function count_stale_claims(claim_list)
+local function count_stale_claims(claim_list, review_statuses)
 	local total = 0
 	for _, claim in ipairs(claim_list or {}) do
-		if claim.freshness == "stale" then
+		if claim.freshness == "stale" and not is_addressed((review_statuses or {})[claim.id]) then
 			total = total + 1
 		end
 	end
@@ -24,10 +28,10 @@ local function count_stale_claims(claim_list)
 	return total
 end
 
-local function count_stale_files(files)
+local function count_stale_files(files, review_statuses)
 	local total = 0
 	for _, file_state in pairs(files or {}) do
-		total = total + count_stale_claims(file_state.claims)
+		total = total + count_stale_claims(file_state.claims, review_statuses)
 	end
 
 	return total
@@ -163,9 +167,9 @@ local function wrap_text(text, width)
 	return lines
 end
 
-local function add_session_summary(lines, session_name, files, active)
+local function add_session_summary(lines, session_name, files, active, review_statuses)
 	local claim_count = count_claims(files)
-	local stale_count = count_stale_files(files)
+	local stale_count = count_stale_files(files, review_statuses)
 	local session_line = with_defaults({
 		kind = "session",
 		active = active,
@@ -213,10 +217,10 @@ local function add_source_summary(lines, source)
 	table.insert(lines, source_line)
 end
 
-local function build_file_line(config, path, file_state)
+local function build_file_line(config, path, file_state, review_statuses)
 	local relative = vim.fn.fnamemodify(path, ":.")
 	local count = #(file_state.claims or {})
-	local stale_count = count_stale_claims(file_state.claims)
+	local stale_count = count_stale_claims(file_state.claims, review_statuses)
 	local text = string.format("%s %s  [%d]", config.signs.file, relative, count)
 	if stale_count > 0 then
 		text = string.format("%s  [stale %d]", text, stale_count)
@@ -244,7 +248,34 @@ local function build_file_line(config, path, file_state)
 	return item
 end
 
-local function build_claim_lines(path, claim, panel_width)
+local function review_action(status, claim_kind)
+	if not status then
+		return nil
+	end
+
+	if status.outcome == "changed" and status.addressed then
+		local count = status.verified_hunk_count or 0
+		return {
+			label = string.format("+%d code change%s", count, count == 1 and "" or "s"),
+			hl = "DoubtPanelDiff",
+			can_open_diff = true,
+		}
+	elseif status.outcome == "answered" then
+		return nil
+	elseif status.outcome == "disagreed" and claim_kind == "concern" then
+		return { label = "concern not valid", hl = "DoubtPanelDiff" }
+	elseif status.outcome == "disagreed" then
+		return nil
+	elseif status.outcome == "needs_input" then
+		return { label = "needs input", hl = "DoubtPanelDiffWarning" }
+	elseif status.outcome == "changed" then
+		return { label = "code changes unavailable", hl = "DoubtPanelDiffWarning" }
+	end
+
+	return nil
+end
+
+local function build_claim_lines(path, claim, panel_width, review_status)
 	local start_col = (claim.start_col or 0) + 1
 	local end_col = claim.end_col and tostring(claim.end_col) or "EOL"
 	local line_label = string.format("L%d:C%d-L%d:C%s", claim.start_line + 1, start_col, claim.end_line + 1, end_col)
@@ -252,7 +283,9 @@ local function build_claim_lines(path, claim, panel_width)
 	local kind_label = string.upper(claim.kind)
 	local kind_cell = string.format("%-" .. CLAIM_KIND_CELL_WIDTH .. "s", kind_label)
 	local meta = claims.meta(claim.kind)
-	local _, note = claims.inline_text(claim)
+	local addressed = is_addressed(review_status)
+	local effective_stale = claim.freshness == "stale" and not addressed
+	local _, note = claims.inline_text(claim, { hide_freshness = addressed })
 	local pw = panel_width or vim.o.columns
 	local items = {}
 
@@ -262,8 +295,8 @@ local function build_claim_lines(path, claim, panel_width)
 	local meta_item = with_defaults({
 		kind = "claim",
 		id = claim.id,
-		active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
-		active_border_hl = claim.freshness == "stale" and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
+		active_hl = effective_stale and (meta.stale_hl or meta.hl) or meta.hl,
+		active_border_hl = effective_stale and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
 		path = path,
 		line = claim.start_line + 1,
 		col = claim.start_col or 0,
@@ -287,8 +320,8 @@ local function build_claim_lines(path, claim, panel_width)
 		local item = with_defaults({
 			kind = "claim",
 			id = claim.id,
-			active_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl,
-			active_border_hl = claim.freshness == "stale" and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
+			active_hl = effective_stale and (meta.stale_hl or meta.hl) or meta.hl,
+			active_border_hl = effective_stale and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
 			markdown = true,
 			path = path,
 			line = claim.start_line + 1,
@@ -301,6 +334,63 @@ local function build_claim_lines(path, claim, panel_width)
 		end
 
 		table.insert(items, item)
+	end
+
+	if review_status and review_status.summary and review_status.summary ~= "" then
+		local response_hl = addressed and "DoubtPanelAgentResponse" or "DoubtPanelAgentResponseWarning"
+		local accent_hl = addressed and "DoubtPanelDiff" or "DoubtPanelDiffWarning"
+		local header_text = "    Agent response"
+		local action = review_action(review_status, claim.kind)
+		if action then
+			header_text = string.format("%s  [%s]", header_text, action.label)
+			if action.can_open_diff then
+				header_text = header_text .. "  [D: view diff]"
+			end
+		end
+		local header = with_defaults({
+			kind = "claim",
+			id = claim.id,
+			active_hl = effective_stale and (meta.stale_hl or meta.hl) or meta.hl,
+			active_border_hl = effective_stale and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
+			line_hl_group = response_hl,
+			path = path,
+			line = claim.start_line + 1,
+			col = claim.start_col or 0,
+			text = header_text,
+		})
+		add_highlight(header, 4, 4 + #"Agent response", accent_hl)
+		if action then
+			local action_token = string.format("[%s]", action.label)
+			local action_col = header_text:find(action_token, 1, true)
+			add_highlight(header, action_col - 1, action_col - 1 + #action_token, action.hl)
+			if action.can_open_diff then
+				local diff_token = "[D: view diff]"
+				local diff_col = header_text:find(diff_token, 1, true)
+				add_highlight(header, diff_col - 1, diff_col - 1 + #diff_token, action.hl)
+			end
+		end
+		table.insert(items, header)
+
+		local summary_prefix = "      "
+		local continuation = string.rep(" ", vim.fn.strdisplaywidth(summary_prefix))
+		local summary_width = math.max(pw - vim.fn.strdisplaywidth(summary_prefix), 1)
+		for idx, summary_line in ipairs(wrap_text(review_status.summary, summary_width)) do
+			local prefix = idx == 1 and summary_prefix or continuation
+			local text = prefix .. summary_line
+			local item = with_defaults({
+				kind = "claim",
+				id = claim.id,
+				active_hl = effective_stale and (meta.stale_hl or meta.hl) or meta.hl,
+				active_border_hl = effective_stale and (meta.stale_active_border_hl or meta.active_border_hl) or meta.active_border_hl,
+				line_hl_group = response_hl,
+				markdown = true,
+				path = path,
+				line = claim.start_line + 1,
+				col = claim.start_col or 0,
+				text = text,
+			})
+			table.insert(items, item)
+		end
 	end
 
 	return items
@@ -356,12 +446,38 @@ function M.build_lines(ctx, panel_width)
 	}
 
 	if session_name then
-		add_session_summary(lines, session_name, files, true)
+		local review_inspection = ctx.review_run_inspection and ctx.review_run_inspection() or nil
+		local review_statuses = review_inspection and review_inspection.statuses or {}
+		add_session_summary(lines, session_name, files, true, review_statuses)
 		add_source_summary(lines, state.active_session_source and state.active_session_source() or "local")
+		if review_inspection and review_inspection.run then
+			local review_text = string.format("Review   %s", review_inspection.run.run_id)
+			if review_inspection.manifest_error then
+				review_text = review_text .. "  [awaiting results]"
+			else
+				if review_inspection.unattributed_count > 0 then
+					review_text = string.format("%s  [unattributed %d]", review_text, review_inspection.unattributed_count)
+				end
+				if (review_inspection.post_response_change_count or 0) > 0 then
+					review_text = review_text .. "  [workspace edited after response]"
+				end
+			end
+			local review_line = with_defaults({ kind = "review_run", text = review_text })
+			add_highlight(review_line, 0, 6, "DoubtPanelMuted")
+			local warning_col = review_text:find("[", 1, true)
+			if warning_col then
+				add_highlight(review_line, warning_col - 1, #review_text, "DoubtPanelDiffWarning")
+			else
+				add_highlight(review_line, 9, #review_text, "DoubtPanelDiff")
+			end
+			table.insert(lines, review_line)
+		end
+		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		local help_hint = with_defaults({ kind = "muted", text = "press ? for help" })
 		add_highlight(help_hint, 6, 7, "DoubtPanelKey")
 		table.insert(lines, help_hint)
+		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 
 		if vim.tbl_isempty(files) then
@@ -370,20 +486,25 @@ function M.build_lines(ctx, panel_width)
 			return lines
 		end
 
+		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		table.insert(lines, with_defaults({ kind = "section", text = "Claims" }))
+		table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		local paths = vim.tbl_keys(files)
 		table.sort(paths)
-		for _, path in ipairs(paths) do
+		for index, path in ipairs(paths) do
 			local file_state = files[path]
-			table.insert(lines, build_file_line(config, path, file_state))
+			if index > 1 then
+				table.insert(lines, with_defaults({ kind = "muted", text = "" }))
+			end
+			table.insert(lines, build_file_line(config, path, file_state, review_statuses))
+			table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 
 			for _, claim in ipairs(file_state.claims or {}) do
-				for _, item in ipairs(build_claim_lines(path, claim, panel_width)) do
+				for _, item in ipairs(build_claim_lines(path, claim, panel_width, review_statuses[claim.id])) do
 					table.insert(lines, item)
 				end
+				table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 			end
-
-			table.insert(lines, with_defaults({ kind = "muted", text = "" }))
 		end
 
 		return lines

@@ -135,6 +135,8 @@ assert_help_open("pressing '?' should open centered help")
 local help_text = read_floating_text()
 t.assert_match(help_text, "Rename selected session", "help should describe panel rename action")
 t.assert_match(help_text, "%[   R    %]", "help should show uppercase R keybind")
+t.assert_match(help_text, "Open selected claim changes", "help should describe claim diff action")
+t.assert_match(help_text, "%[   D    %]", "help should show uppercase D keybind")
 
 local open_windows = floating_windows()
 vim.api.nvim_set_current_win(open_windows[1])

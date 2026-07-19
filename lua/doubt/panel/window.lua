@@ -116,6 +116,10 @@ function M.open(ctx, panel_api)
 		navigation.delete_line(ctx)
 	end), { buffer = panel_state.bufnr, silent = true, desc = "Delete doubt item" })
 
+	vim.keymap.set("n", "D", navigation.close_help_then(function()
+		navigation.open_diff_line(ctx)
+	end), { buffer = panel_state.bufnr, silent = true, desc = "Open doubt claim changes" })
+
 	vim.keymap.set("n", "R", navigation.close_help_then(function()
 		local line = vim.api.nvim_win_get_cursor(0)[1]
 		local item = panel_state.lines[line]

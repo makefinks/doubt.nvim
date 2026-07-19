@@ -12,6 +12,7 @@ CONTENTS                                                      *doubt-contents*
 5. Keymaps.....................................................|doubt-keymaps|
 6. Configuration.........................................|doubt-configuration|
 7. Healthcheck.............................................|doubt-healthcheck|
+8. Review runs............................................|doubt-review-runs|
 
 ===============================================================================
 INTRODUCTION                                              *doubt-introduction*
@@ -125,6 +126,7 @@ Main sections:
 - `inline_notes`
 - `keymaps`
 - `panel`
+- `review_runs`
 - `state_path`
 - `signs`
 
@@ -139,5 +141,53 @@ Run `:DoubtHealthcheck` to inspect:
 - command registration
 - config merge behavior
 - persisted session state shape
+
+===============================================================================
+REVIEW RUNS                                                *doubt-review-runs*
+
+In a Git repository, `:DoubtExport` records the exact working tree at handoff
+time and asks the agent to write a claim-to-change manifest under
+`.doubt/runs/<run-id>/results.json`.
+
+Run `:DoubtRefresh` or press `r` in the panel after the agent finishes. Each
+reported claim displays the agent summary in a separate response block.
+Validated changes display `[+N code changes] [D: view diff]` in the response
+header, where N is the number of attributed diff hunks. Ordinary answers need
+no badge. A rejected concern displays `[concern not valid]`, unresolved input
+displays `[needs input]`, and unmatched reported changes display
+`[code changes unavailable]` without a diff action. Place the cursor on a claim
+and press `D` to open its associated changes in a unified diff tab. Press `q`
+to close the diff tab.
+
+Changed claims must declare at least one change and are addressed only when a
+reported change matches the actual diff. Answered and disagreed claims need no
+code change. Needs-input and unmatched results remain unresolved. Every result
+includes a non-empty summary with concrete reasoning. Addressed status
+overrides stale presentation without changing the stored anchor freshness.
+
+The default `review_runs.diff_viewer` value is `auto`. It prefers CodeDiff,
+then Diffview, and otherwise uses doubt.nvim's built-in unified diff. Set it
+to `codediff`, `diffview`, or `builtin` to select a viewer explicitly. A Lua
+function may also be supplied as a custom adapter.
+
+CodeDiff and Diffview receive temporary before/after data containing only the
+claim's attributed textual hunks. Non-textual changes fall back to the
+built-in viewer.
+
+The manifest supplies semantic attribution; doubt.nvim calculates the actual
+diff between the export baseline and the sealed agent-completion tree. Changes
+not attributed to a claim are reported in the panel. Later worktree edits do
+not alter claim diffs and appear as `[workspace edited after response]`. Review-run
+diffs require Git, but normal exports continue to work without it.
+
+Each export creates a `complete` helper. After all code changes, the agent
+writes `results.pending.json` and runs that helper as its final step. The
+helper requires one result per exported claim, captures and retains the exact
+completion tree with a temporary Git index, then publishes `results.json`.
+It does not modify the real index, branch, or commit history.
+
+Results compose across exports by claim ID. Exporting newly added claims keeps
+prior outcomes and diffs for claims omitted from the new run. Re-exporting the
+same claim supersedes its older result, so it waits for the newer manifest.
 
 vim:tw=78:ts=8:noet:ft=help

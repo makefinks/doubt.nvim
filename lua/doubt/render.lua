@@ -243,16 +243,22 @@ function M.render_claim(ctx, bufnr, claim)
 	local path = ctx.current_path(bufnr)
 	local start_row, end_row = claim_rows(bufnr, claim)
 	local start_col = clamp_col(bufnr, start_row, claim.start_col)
-	local claim_hl = claim.freshness == "stale" and (meta.stale_hl or meta.hl) or meta.hl
+	local review_status = ctx.claim_review_status and ctx.claim_review_status(claim.id) or nil
+	local addressed = review_status and review_status.addressed == true
+	local effective_stale = claim.freshness == "stale" and not addressed
+	local claim_hl = effective_stale and (meta.stale_hl or meta.hl) or meta.hl
 	local inline_label_hl = meta.inline_label_hl
 	local inline_text_hl = meta.inline_text_hl
 	local focus_mode = ctx.focus_mode and ctx.focus_mode(path, claim) or "normal"
 	if focus_mode == "dimmed" then
-		claim_hl = claim.freshness == "stale" and (meta.dim_stale_hl or meta.dim_hl or claim_hl) or (meta.dim_hl or claim_hl)
+		claim_hl = effective_stale and (meta.dim_stale_hl or meta.dim_hl or claim_hl) or (meta.dim_hl or claim_hl)
 		inline_label_hl = meta.dim_inline_label_hl or inline_label_hl
 		inline_text_hl = meta.dim_inline_text_hl or inline_text_hl
 	end
-	local inline_label, inline_text = claims.inline_text(claim)
+	local inline_label, inline_text = claims.inline_text(claim, { hide_freshness = addressed })
+	if addressed then
+		inline_text = string.format("[addressed: %s] %s", review_status.outcome, inline_text)
+	end
 	local expanded = ctx.is_claim_expanded and ctx.is_claim_expanded(ctx.current_path(bufnr), claim)
 	local body_lines = expanded
 		and wrap_inline_text(inline_text, config.inline_notes.max_width)
