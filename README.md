@@ -214,7 +214,7 @@ require("doubt").setup({
       review = table.concat({
         "The reviewer has provided feedback for the code in the xml below.",
         "Fetch every referenced file and line from the repository before performing claim specific actions.",
-        "After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim-by-claim report.",
+        "After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process.",
         "",
         "{{xml}}",
       }, "\n"),
@@ -223,7 +223,7 @@ require("doubt").setup({
         "Fetch every referenced file and line from the repository before assigning claim specific work.",
         "Triage each claim and delegate explanation or revision work as needed.",
         "You should act as a coordinator that delegates work and consolidates the individual responses from subagents into a final response for the user.",
-        "After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim-by-claim report.",
+        "After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process.",
         "",
         "{{xml}}",
       }, "\n"),

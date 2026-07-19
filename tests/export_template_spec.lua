@@ -53,9 +53,9 @@ t.assert_match(
 )
 	t.assert_match(
 		review_text,
-		"After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim%-by%-claim report%.",
-		"review should request a final textual summary after the manifest without duplicating per-claim responses"
-)
+		"After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process%.",
+		"review should request a concise outcome without process narration"
+	)
 t.assert_eq(review_text:match("Respond with one section per claim"), nil, "review should not request decorative per-claim output")
 t.assert_match(
 	review_text,
@@ -85,9 +85,9 @@ t.assert_match(
 )
 	t.assert_match(
 		multi_agent_text,
-		"After addressing the claims and writing any required results manifest, give a concise textual implementation summary without repeating a claim%-by%-claim report%.",
-		"multi_agent should request a final textual summary after the manifest without duplicating each result"
-)
+		"After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process%.",
+		"multi_agent should request a concise outcome without process narration"
+	)
 t.assert_eq(multi_agent_text:match("include one section per claim"), nil, "multi_agent should not request decorative per-claim output")
 t.assert_match(
 	multi_agent_text,

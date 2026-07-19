@@ -16,6 +16,7 @@ function M.new(deps)
 		review_runs = deps.review_runs,
 		review_run_cache = nil,
 		review_run_cache_key = nil,
+		review_run_session_cache = {},
 	}
 
 	function ctx.stop_live_edit_timer(bufnr)
@@ -149,17 +150,20 @@ function M.new(deps)
 		return ctx.normalize_path(vim.api.nvim_buf_get_name(bufnr))
 	end
 
-	local function active_review_run_key()
-		local session_name = deps.state.active_session_name()
+	local function review_run_key(session_name, session_source)
 		if not session_name then
 			return nil
 		end
 		return string.format(
 			"%s:%s:%s",
 			vim.fs.normalize(vim.fn.getcwd()),
-			deps.state.active_session_source() or "local",
+			session_source or "local",
 			session_name
 		)
+	end
+
+	local function active_review_run_key()
+		return review_run_key(deps.state.active_session_name(), deps.state.active_session_source())
 	end
 
 	function ctx.refresh_review_run_inspection()
@@ -174,12 +178,14 @@ function M.new(deps)
 			workspace = vim.fn.getcwd(),
 		})
 		ctx.review_run_cache_key = active_review_run_key()
+		ctx.review_run_session_cache[ctx.review_run_cache_key] = { inspection = ctx.review_run_cache }
 		return ctx.review_run_cache
 	end
 
 	function ctx.invalidate_review_run_inspection()
 		ctx.review_run_cache = nil
 		ctx.review_run_cache_key = nil
+		ctx.review_run_session_cache = {}
 	end
 
 	function ctx.review_run_inspection()
@@ -187,6 +193,29 @@ function M.new(deps)
 			return ctx.refresh_review_run_inspection()
 		end
 		return ctx.review_run_cache
+	end
+
+	function ctx.review_run_inspection_for(session_name, session_source)
+		local key = review_run_key(session_name, session_source)
+		if not deps.review_runs or not key then
+			return nil
+		end
+		if key == active_review_run_key() then
+			return ctx.review_run_inspection()
+		end
+
+		local cached = ctx.review_run_session_cache[key]
+		if cached then
+			return cached.inspection
+		end
+
+		local inspection = deps.review_runs.inspect({
+			session_name = session_name,
+			session_source = session_source,
+			workspace = vim.fn.getcwd(),
+		})
+		ctx.review_run_session_cache[key] = { inspection = inspection }
+		return inspection
 	end
 
 	function ctx.claim_review_status(claim_id)

@@ -37,6 +37,19 @@ local function count_stale_files(files, review_statuses)
 	return total
 end
 
+local function count_addressed_files(files, review_statuses)
+	local total = 0
+	for _, file_state in pairs(files or {}) do
+		for _, claim in ipairs(file_state.claims or {}) do
+			if is_addressed((review_statuses or {})[claim.id]) then
+				total = total + 1
+			end
+		end
+	end
+
+	return total
+end
+
 local function with_defaults(item)
 	item.highlights = item.highlights or {}
 	return item
@@ -396,11 +409,12 @@ local function build_claim_lines(path, claim, panel_width, review_status)
 	return items
 end
 
-local function build_saved_session_line(config, session_name, session_state, source)
+local function build_saved_session_line(config, session_name, session_state, source, review_statuses)
 	local files = (session_state or {}).files or {}
 	local file_count = vim.tbl_count(files)
 	local claim_count = count_claims(files)
-	local stale_count = count_stale_files(files)
+	local stale_count = count_stale_files(files, review_statuses)
+	local addressed_count = count_addressed_files(files, review_statuses)
 	local text = string.format(
 		"%s %s  [%d files, %d claims]",
 		config.signs.file,
@@ -408,6 +422,9 @@ local function build_saved_session_line(config, session_name, session_state, sou
 		file_count,
 		claim_count
 	)
+	if addressed_count > 0 then
+		text = string.format("%s [addressed %d]", text, addressed_count)
+	end
 	if stale_count > 0 then
 		text = string.format("%s [stale %d]", text, stale_count)
 	end
@@ -425,6 +442,13 @@ local function build_saved_session_line(config, session_name, session_state, sou
 	local claim_col = text:find(claim_token, 1, true)
 	if claim_col then
 		add_highlight(item, claim_col - 1, claim_col - 1 + #claim_token, "DoubtPanelCount")
+	end
+	if addressed_count > 0 then
+		local addressed_token = string.format("[addressed %d]", addressed_count)
+		local addressed_col = text:find(addressed_token, 1, true)
+		if addressed_col then
+			add_highlight(item, addressed_col - 1, addressed_col - 1 + #addressed_token, "DoubtPanelDiff")
+		end
 	end
 	if stale_count > 0 then
 		local stale_token = string.format("[stale %d]", stale_count)
@@ -533,7 +557,9 @@ function M.build_lines(ctx, panel_width)
 	if not vim.tbl_isempty(session_names) then
 		table.insert(lines, with_defaults({ kind = "section", text = "Local Sessions" }))
 		for _, name in ipairs(session_names) do
-			table.insert(lines, build_saved_session_line(config, name, state.get().sessions[name], "local"))
+			local inspection = ctx.review_run_inspection_for and ctx.review_run_inspection_for(name, "local") or nil
+			local statuses = inspection and inspection.statuses or {}
+			table.insert(lines, build_saved_session_line(config, name, state.get().sessions[name], "local", statuses))
 		end
 	end
 
@@ -543,7 +569,9 @@ function M.build_lines(ctx, panel_width)
 		end
 		table.insert(lines, with_defaults({ kind = "section", text = "Workspace Sessions" }))
 		for _, name in ipairs(workspace_session_names) do
-			table.insert(lines, build_saved_session_line(config, name, state.workspace_session_state(name), "workspace"))
+			local inspection = ctx.review_run_inspection_for and ctx.review_run_inspection_for(name, "workspace") or nil
+			local statuses = inspection and inspection.statuses or {}
+			table.insert(lines, build_saved_session_line(config, name, state.workspace_session_state(name), "workspace", statuses))
 		end
 	end
 
