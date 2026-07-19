@@ -277,6 +277,9 @@ end
 function M.delete_claim(opts)
 	opts = opts or {}
 	local claim = state.find_claim(opts.path, opts.id)
+	if not confirm("Delete doubt claim?") then
+		return
+	end
 
 	if not state.delete_claim(opts.path, opts.id) then
 		ctx.notify("Unable to delete claim", vim.log.levels.WARN)

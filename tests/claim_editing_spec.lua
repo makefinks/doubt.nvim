@@ -16,6 +16,7 @@ local input = require("doubt.input")
 local state = require("doubt.state")
 local original_select = vim.ui.select
 local original_ask_note = input.ask_note
+local original_confirm = vim.fn.confirm
 
 doubt.setup({
 	keymaps = false,
@@ -107,11 +108,24 @@ captured_note_opts = nil
 input.ask_note = original_ask_note
 
 vim.api.nvim_win_set_cursor(0, { 1, 3 })
+local confirm_message
+vim.fn.confirm = function(message)
+	confirm_message = message
+	return 2
+end
+vim.cmd("DoubtClaimDelete")
+t.assert_eq(confirm_message, "Delete doubt claim?", "claim delete should ask for confirmation")
+t.assert_eq(state.find_claim(path, "tight") ~= nil, true, "claim delete should keep the claim when cancelled")
+
+vim.fn.confirm = function()
+	return 1
+end
 vim.cmd("DoubtClaimDelete")
 t.assert_eq(state.find_claim(path, "tight"), nil, "claim delete should remove the nearest claim")
 t.assert_eq(state.find_claim(path, "wide") ~= nil, true, "claim delete should keep other claims intact")
 
 doubt.undo_deleted_claim()
 t.assert_eq(state.find_claim(path, "tight") ~= nil, true, "undo delete should restore the most recently deleted claim")
+vim.fn.confirm = original_confirm
 	end)
 end)
