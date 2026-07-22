@@ -4,12 +4,6 @@ local SCHEMA_VERSION = 1
 local RUNS_RELATIVE_DIR = vim.fs.joinpath(".doubt", "runs")
 local MODULE_PATH = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
 local PLUGIN_ROOT = vim.fs.normalize(vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(MODULE_PATH))))
-local CHANGE_TYPES = {
-	created = true,
-	deleted = true,
-	modified = true,
-	renamed = true,
-}
 local OUTCOMES = {
 	answered = true,
 	changed = true,
@@ -165,12 +159,19 @@ local function completion_helper_path(root, run_id)
 	return vim.fs.joinpath(run_dir(root, run_id), "complete")
 end
 
+local function diff_helper_path(root, run_id)
+	return vim.fs.joinpath(run_dir(root, run_id), "diff")
+end
+
 local function attach_run_paths(run, root)
 	run.root = root
 	run.absolute_manifest_path = results_path(root, run.run_id)
 	run.absolute_pending_manifest_path = pending_results_path(root, run.run_id)
 	run.absolute_completion_path = completion_path(root, run.run_id)
 	run.absolute_completion_helper_path = completion_helper_path(root, run.run_id)
+	if run.diff_helper_path then
+		run.absolute_diff_helper_path = diff_helper_path(root, run.run_id)
+	end
 	return run
 end
 
@@ -178,23 +179,43 @@ local function shell_quote(value)
 	return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
-local function write_completion_helper(run)
-	local lua_command = string.format(
-		'package.path = %q .. "/lua/?.lua;" .. %q .. "/lua/?/init.lua;" .. package.path; local ok, err = require("doubt.review_runs").complete({ workspace = %q, run_id = %q }); if not ok then io.stderr:write((err or "Unable to complete doubt review run") .. "\\n"); vim.cmd("cquit 1") end',
-		PLUGIN_ROOT,
-		PLUGIN_ROOT,
-		run.root,
-		run.run_id
-	)
+local function write_helper(path, lua_command)
 	local lines = {
 		"#!/bin/sh",
 		"exec nvim --headless -u NONE -c " .. shell_quote("lua " .. lua_command) .. " +qa",
 	}
-	local ok = pcall(vim.fn.writefile, lines, run.absolute_completion_helper_path)
-	if not ok or not vim.uv.fs_chmod(run.absolute_completion_helper_path, 493) then
+	local ok = pcall(vim.fn.writefile, lines, path)
+	if not ok or not vim.uv.fs_chmod(path, 493) then
 		return false
 	end
 	return true
+end
+
+local function module_command(command)
+	return string.format(
+		'package.path = %q .. "/lua/?.lua;" .. %q .. "/lua/?/init.lua;" .. package.path; %s',
+		PLUGIN_ROOT,
+		PLUGIN_ROOT,
+		command
+	)
+end
+
+local function write_completion_helper(run)
+	local command = string.format(
+		'local ok, err = require("doubt.review_runs").complete({ workspace = %q, run_id = %q }); if not ok then io.stderr:write((err or "Unable to complete doubt review run") .. "\\n"); vim.cmd("cquit 1") end',
+		run.root,
+		run.run_id
+	)
+	return write_helper(run.absolute_completion_helper_path, module_command(command))
+end
+
+local function write_diff_helper(run)
+	local command = string.format(
+		'local output, err = require("doubt.review_runs").diff({ workspace = %q, run_id = %q }); if output == nil then io.stderr:write((err or "Unable to calculate doubt review diff") .. "\\n"); vim.cmd("cquit 1") elseif output ~= "" then io.write(output .. "\\n") end',
+		run.root,
+		run.run_id
+	)
+	return write_helper(run.absolute_diff_helper_path, module_command(command))
 end
 
 local function new_run_id()
@@ -264,6 +285,7 @@ function M.create(opts)
 	local pending_manifest_relative_path = vim.fs.joinpath(RUNS_RELATIVE_DIR, run_id, "results.pending.json")
 	local completion_relative_path = vim.fs.joinpath(RUNS_RELATIVE_DIR, run_id, "completion.json")
 	local completion_helper_relative_path = vim.fs.joinpath(RUNS_RELATIVE_DIR, run_id, "complete")
+	local diff_helper_relative_path = vim.fs.joinpath(RUNS_RELATIVE_DIR, run_id, "diff")
 	local run = {
 		schema_version = SCHEMA_VERSION,
 		run_id = run_id,
@@ -280,6 +302,7 @@ function M.create(opts)
 		pending_manifest_path = pending_manifest_relative_path,
 		completion_path = completion_relative_path,
 		completion_helper_path = completion_helper_relative_path,
+		diff_helper_path = diff_helper_relative_path,
 	}
 	if not write_json(run_path(root, run_id), run) then
 		git(root, { "update-ref", "-d", baseline_ref })
@@ -290,6 +313,12 @@ function M.create(opts)
 		pcall(vim.uv.fs_unlink, run_path(root, run_id))
 		git(root, { "update-ref", "-d", baseline_ref })
 		return nil, "Unable to write review-run completion helper"
+	end
+	if not write_diff_helper(run) then
+		pcall(vim.uv.fs_unlink, run.absolute_completion_helper_path)
+		pcall(vim.uv.fs_unlink, run_path(root, run_id))
+		git(root, { "update-ref", "-d", baseline_ref })
+		return nil, "Unable to write review-run diff helper"
 	end
 	return run
 end
@@ -412,16 +441,11 @@ local function load_manifest(run, path)
 			if type(change) ~= "table" or not valid_relative_path(change.path) then
 				return nil, "Agent results manifest contains an invalid changed path"
 			end
-			local change_type = type(change.type) == "string" and change.type or "modified"
-			if not CHANGE_TYPES[change_type]
-				or (change.regions ~= nil and (type(change.regions) ~= "table" or not vim.islist(change.regions)))
-			then
+			if change.regions ~= nil and (type(change.regions) ~= "table" or not vim.islist(change.regions)) then
 				return nil, "Agent results manifest contains an invalid change"
 			end
 			local normalized_change = {
 				path = vim.fs.normalize(change.path),
-				type = change_type,
-				description = type(change.description) == "string" and change.description or "",
 				regions = {},
 			}
 			for _, region in ipairs(change.regions or {}) do
@@ -641,20 +665,45 @@ local function hunk_matches_change(hunk, change)
 	return false
 end
 
-local function tree_diff(root, from_tree, to_tree)
-	local diff, diff_error = git(root, {
+local function tree_diff_text(root, from_tree, to_tree)
+	return git(root, {
 		"diff",
 		"--no-ext-diff",
 		"--find-renames",
-		"--unified=3",
+		"--unified=0",
 		from_tree,
 		to_tree,
 		"--",
 	})
+end
+
+local function tree_diff(root, from_tree, to_tree)
+	local diff, diff_error = tree_diff_text(root, from_tree, to_tree)
 	if diff == nil then
 		return nil, diff_error
 	end
 	return parse_diff(diff)
+end
+
+function M.diff(opts)
+	opts = opts or {}
+	local root = git_root(opts.workspace or vim.fn.getcwd())
+	if not root then
+		return nil, "Review-run diffs require a Git repository"
+	end
+	local run = load_run_by_id(root, opts.run_id)
+	if not run or not run.diff_helper_path then
+		return nil, "Unable to find a diffable doubt review run"
+	end
+	local current_tree, tree_error = capture_tree(root)
+	if not current_tree then
+		return nil, "Unable to capture current review tree: " .. (tree_error or "unknown error")
+	end
+	local diff, diff_error = tree_diff_text(root, run.baseline.object, current_tree)
+	if diff == nil then
+		return nil, "Unable to calculate review-run diff: " .. (diff_error or "unknown error")
+	end
+	return diff
 end
 
 local function review_diff(run)
@@ -894,28 +943,75 @@ function M.protocol_text(run)
 		return ""
 	end
 	return table.concat({
-		"Doubt review run protocol:",
-		string.format("- Run ID: %s", run.run_id),
-		string.format("- Repository root: %s", run.root),
-		string.format("- Write the pending results manifest to %s after completing all code changes.", run.absolute_pending_manifest_path),
-		string.format("- Then run %s as the final step. It validates every claim, seals the completion tree, and publishes results.json.", shell_quote(run.absolute_completion_helper_path)),
-		"- Do not write results.json directly and do not modify code after running the completion helper.",
-		"- Write JSON with schema_version 1, this run_id, and a claims array.",
-		"- Each claim result must contain claim_id, outcome, a non-empty summary, and changes.",
-		"- Write the summary as a concise, direct response to the reviewer. Include only the conclusion and the reasoning needed to understand it; do not narrate investigation steps or mention that no code was changed unless that fact matters.",
-		"- Do not duplicate these results as a claim-by-claim final response; keep the final response concise.",
-		"- Each change must contain a repo-relative path, type, description, and optional one-based old/new regions.",
-		"- Valid change types are modified, created, deleted, and renamed.",
+		"## Doubt review run",
+		"",
+		string.format("- Run ID: `%s`", run.run_id),
+		string.format("- Repository root: `%s`", run.root),
+		"",
+		"### Required workflow",
+		"",
+		"1. Address every exported claim; do not skip any.",
+		"2. Finish all code changes before deriving regions or writing the manifest.",
+		"3. Run the diff helper below and derive regions from its output.",
+		string.format("4. Write the pending results manifest to `%s`.", run.absolute_pending_manifest_path),
+		"5. Run this completion helper as the final step:",
+		"",
+		"```sh",
+		shell_quote(run.absolute_completion_helper_path),
+		"```",
+		"",
+		"The helper validates every claim, seals the completion tree, and publishes `results.json`. Do not write `results.json` directly or modify code after running the helper.",
+		"",
+		"### Manifest",
+		"",
+		"- Use `schema_version: 1`, this run ID, and a `claims` array.",
+		"- Each claim requires `claim_id`, `outcome`, a non-empty `summary`, and `changes`.",
+		"- Write `summary` as a concise, direct response with only the conclusion and necessary reasoning. Do not narrate investigation steps.",
+		"- Each change requires a repo-relative `path`; `regions` is optional. Use an empty `changes` array when no code changed.",
 		"- Associate every intentional changed region with one or more claim IDs.",
-		"- Use an empty changes array when no code was changed for a claim.",
-		"- Outcomes and their meaning:",
-		'  - changed: the agent agreed and modified the code. Summary must explain the analysis and what was changed.',
-		'  - answered: the agent responded without code changes. Summary must directly answer the question or feedback.',
-		'  - disagreed: the agent disagreed with the claim. Summary must explain why the claim is incorrect.',
-		'  - needs_input: more information is required. Summary must state what is needed and why.',
-		"- Every claim in the export must be addressed. Do not skip any.",
-		"Example manifest:",
-		string.format('{"schema_version":1,"run_id":"%s","claims":[{"claim_id":"CLAIM_ID","outcome":"changed","summary":"Confirmed unvalidated input reached the parser and could raise an uncaught error. Added boundary validation so malformed input now returns a structured failure.","changes":[{"path":"lua/example.lua","type":"modified","description":"Added validation","regions":[{"old_start":10,"old_end":12,"new_start":10,"new_end":16}]}]}]}', run.run_id),
+		"- Keep the final conversational response concise; do not repeat these claim-by-claim results.",
+		"",
+		"### Regions",
+		"",
+		"Derive one-based old/new ranges from the authoritative zero-context diff produced by:",
+		"",
+		"```sh",
+		shell_quote(run.absolute_diff_helper_path),
+		"```",
+		"",
+		"Copy ranges from each `@@ -old_start,old_count +new_start,new_count @@` header. Ends are inclusive: `end = start + count - 1`.",
+		"When a side has count `0`, omit that side's range: omit old coordinates for an insertion and new coordinates for a deletion.",
+		"",
+		"### Outcomes",
+		"",
+		"- `changed`: agreed and modified code; summarize the reasoning and change.",
+		"- `answered`: responded without code changes; directly answer the feedback.",
+		"- `disagreed`: explain why the claim is incorrect.",
+		"- `needs_input`: state what information is required and why.",
+		"",
+		"### Example manifest",
+		"",
+		"```json",
+		"{",
+		'  "schema_version": 1,',
+		string.format('  "run_id": "%s",', run.run_id),
+		'  "claims": [',
+		"    {",
+		'      "claim_id": "CLAIM_ID",',
+		'      "outcome": "changed",',
+		'      "summary": "Confirmed the issue and added boundary validation.",',
+		'      "changes": [',
+		"        {",
+		'          "path": "lua/example.lua",',
+		'          "regions": [',
+		'            { "old_start": 10, "old_end": 12, "new_start": 10, "new_end": 16 }',
+		"          ]",
+		"        }",
+		"      ]",
+		"    }",
+		"  ]",
+		"}",
+		"```",
 	}, "\n")
 end
 

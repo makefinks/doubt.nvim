@@ -67,6 +67,10 @@ describe("review runs", function()
 		t.assert_eq(retained.code, 0, "review run should retain its baseline under a hidden Git ref")
 		t.assert_match(run.manifest_path, "^%.doubt/runs/.+/results%.json$", "run should expose the agent manifest path")
 		t.assert_eq(vim.uv.fs_stat(run.absolute_completion_helper_path) ~= nil, true, "review runs should include a completion helper")
+		t.assert_eq(vim.uv.fs_stat(run.absolute_diff_helper_path) ~= nil, true, "review runs should include a diff helper")
+		local initial_diff = vim.system({ run.absolute_diff_helper_path }, { cwd = root, text = true }):wait()
+		t.assert_eq(initial_diff.code, 0, "the generated diff helper should run before any changes")
+		t.assert_eq(vim.trim(initial_diff.stdout), "", "the diff helper should start from the captured worktree, including untracked files")
 
 		vim.fn.writefile({
 			"local repository = require('session.repository')",
@@ -86,6 +90,12 @@ describe("review runs", function()
 		}, vim.fs.joinpath(root, "lua", "session", "repository.lua"))
 		vim.fn.writefile({ "describe('repository', function() end)" }, vim.fs.joinpath(root, "tests", "repository_spec.lua"))
 		vim.uv.fs_chmod(vim.fs.joinpath(root, "run.sh"), 493)
+		local preview = vim.system({ run.absolute_diff_helper_path }, { cwd = root, text = true }):wait()
+		t.assert_eq(preview.code, 0, "the generated diff helper should compare complete worktree snapshots")
+		t.assert_match(preview.stdout, "diff %-%-git a/lua/session%.lua b/lua/session%.lua", "the diff helper should retain baseline-untracked files as modifications")
+		t.assert_eq(preview.stdout:find("deleted file mode 100644", 1, true), nil, "baseline-untracked files should not appear deleted")
+		t.assert_match(preview.stdout, "diff %-%-git a/lua/session/repository%.lua b/lua/session/repository%.lua", "the diff helper should include newly created files")
+		t.assert_match(preview.stdout, "@@ %-0,0 %+1 @@", "the diff helper should use zero-context hunks")
 
 		vim.fn.writefile({ vim.json.encode({
 			schema_version = 1,
@@ -151,24 +161,16 @@ describe("review runs", function()
 					changes = {
 						{
 							path = "lua/session.lua",
-							type = "modified",
-							description = "Delegated storage access.",
 							regions = { { old_start = 1, old_end = 5, new_start = 1, new_end = 6 } },
 						},
 						{
 							path = "lua/session/repository.lua",
-							type = "created",
-							description = "Added repository module.",
 						},
 						{
 							path = "tests/repository_spec.lua",
-							type = "created",
-							description = "Added repository tests.",
 						},
 						{
 							path = "run.sh",
-							type = "modified",
-							description = "Made the helper executable.",
 						},
 					},
 				},
@@ -209,7 +211,7 @@ describe("review runs", function()
 			session_source = "local",
 		})
 		t.assert_eq(inspect_error, nil, "valid agent results should be inspectable")
-		t.assert_eq(inspection.statuses["claim-split"].verified_hunk_count, 4, "one claim should own text and file-level changes across files")
+		t.assert_eq(inspection.statuses["claim-split"].verified_hunk_count, 5, "zero-context attribution should keep separate edits in distinct hunks")
 		t.assert_eq(inspection.statuses["claim-explain"].verified_hunk_count, 0, "answer-only claims should have no hunks")
 		t.assert_eq(inspection.statuses["claim-split"].addressed, true, "changed claims should be addressed when their diff is verified")
 		t.assert_eq(inspection.statuses["claim-explain"].addressed, true, "answered claims should be addressed without code changes")
@@ -248,7 +250,7 @@ describe("review runs", function()
 		})
 		t.assert_eq(inspection.unattributed_count, 0, "later worktree changes should not alter the sealed review diff")
 		t.assert_eq(inspection.post_response_change_count, 1, "later worktree changes should be reported separately")
-		t.assert_eq(inspection.statuses["claim-split"].verified_hunk_count, 4, "later edits should not alter the recorded claim diff")
+		t.assert_eq(inspection.statuses["claim-split"].verified_hunk_count, 5, "later edits should not alter the recorded claim diff")
 
 		local malicious_id = "run-99991231T235959Z-999999"
 		local malicious_dir = vim.fs.joinpath(root, ".doubt", "runs", malicious_id)
