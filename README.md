@@ -111,8 +111,8 @@ Workspace session management:
 - `:DoubtWorkspaceSessionRename [name] [new_name]`
 
 Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`, and `:DoubtClaim <kind>` operate on the current line. With a visual or Ex range, they use that range instead.
-If you omit `[note]`, an inline note popup asks for one.
-Type `@` in the note popup to reference a project file. In Git repositories, the picker lists tracked and non-ignored untracked files from the repository root; elsewhere, it scans the current working directory. The picker uses `vim.ui.select`, so any configured UI selector can provide the interface without being a doubt.nvim dependency.
+If you omit `[note]`, a borderless editor opens directly inside the rendered claim block. Use normal insert-mode editing, `<CR>` for new lines, `<S-CR>` or `ZZ` to save, and `ZQ`, `q`, or normal-mode `<Esc>` to cancel. Set `input.mode = "popup"` to retain the bordered popup editor.
+Type `@` in either note editor to reference a project file. In Git repositories, the picker lists tracked and non-ignored untracked files from the repository root; elsewhere, it scans the current working directory. The picker uses `vim.ui.select`, so any configured UI selector can provide the interface without being a doubt.nvim dependency.
 
 `:DoubtExport` copies the active session to the configured register using the default export template, or a named template override when you pass one. It exports only trusted claims (`fresh`/`reanchored`) and reports skipped stale claims.
 
@@ -231,6 +231,9 @@ require("doubt").setup({
   },
   input = {
     border = "rounded",
+    mode = "inline",
+    inline_max_height = 6,
+    inline_min_width = 12,
     prompts = {
       question = "Question note: ",
       concern = "Concern note: ",

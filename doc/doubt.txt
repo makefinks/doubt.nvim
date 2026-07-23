@@ -84,6 +84,11 @@ Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`,
 and `:DoubtClaim <kind>` act on the current line. With a visual or Ex range,
 they use that range instead.
 
+When a note argument is omitted, range claims are edited directly in a
+borderless editor inside the rendered claim block. Use `<S-CR>` or `ZZ` to
+save. Use `ZQ`, `q`, or normal-mode `<Esc>` to cancel. `<CR>` inserts a new
+line. Set `input.mode = "popup"` to use the bordered popup editor instead.
+
 Built-in export templates:
 
 - `raw`

@@ -32,6 +32,9 @@ local DEFAULTS = {
 	register = "+",
 	input = {
 		border = "rounded",
+		mode = "inline",
+		inline_max_height = 6,
+		inline_min_width = 12,
 		prompts = {
 			question = "Question note: ",
 			concern = "Concern note: ",
@@ -202,6 +205,8 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtInlinePrefix", { fg = "#7F8794" })
 	vim.api.nvim_set_hl(0, "DoubtInlineBar", { bg = "#000000", fg = "#000000" })
 	vim.api.nvim_set_hl(0, "DoubtInlineAddressed", { fg = "#78A98A", bg = "#13251B" })
+	vim.api.nvim_set_hl(0, "DoubtInlineEditingBar", { fg = "#0B0F14", bg = "#0B0F14" })
+	vim.api.nvim_set_hl(0, "DoubtInlineEditingBadge", { fg = "#E2E8F0", bg = "#0B0F14", bold = true })
 	for kind, meta in pairs(config.claim_kinds or {}) do
 		meta.styles = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS.claim_kinds.question.styles or {}), meta.styles or {})
 		local claim_group = meta.hl or ("Doubt" .. meta.command)

@@ -13,6 +13,7 @@ vim.fn.writefile({ "alpha = 1", "beta = alpha + 1", "return beta" }, temp_file)
 local doubt = require("doubt")
 local claims = require("doubt.claims")
 local input = require("doubt.input")
+local inline_editor = require("doubt.inline_editor")
 local state = require("doubt.state")
 local original_select = vim.ui.select
 local original_ask_note = input.ask_note
@@ -86,24 +87,73 @@ vim.cmd("DoubtClaimNote rewritten note")
 edited_claim = state.find_claim(path, "tight")
 t.assert_eq(edited_claim.note, "rewritten note", "claim note edit should update the nearest claim")
 
-local captured_note_opts
-input.ask_note = function(opts, callback)
-	captured_note_opts = vim.deepcopy(opts)
-	callback("inline rewrite", false)
-end
-
 vim.cmd("DoubtClaimNote")
-edited_claim = state.find_claim(path, "tight")
-	t.assert_eq(edited_claim.note, "inline rewrite", "claim note inline editor should update the nearest claim")
-	t.assert_eq(captured_note_opts.default, "rewritten note", "claim note editor should preload the existing note")
-	t.assert_eq(captured_note_opts.line, 0, "claim note editor should anchor to the claim start line")
-	t.assert_eq(captured_note_opts.col, 2, "claim note editor should anchor to the claim start column")
+local editor = inline_editor.status()
+t.assert_eq(editor.active, true, "claim note editing should open the inline editor")
+t.assert_eq(editor.draft, false, "editing an existing claim should not create a draft")
+t.assert_eq(editor.claim.id, "tight", "inline editor should target the nearest claim")
+t.assert_eq(vim.api.nvim_buf_get_lines(editor.bufnr, 0, -1, false), { "rewritten note" }, "inline editor should preload the existing note")
+t.assert_eq(vim.api.nvim_win_get_config(editor.winid).border, "none", "inline editor should use a seamless borderless window")
 
-captured_note_opts = nil
+vim.api.nvim_buf_set_lines(editor.bufnr, 0, -1, false, { "inline rewrite", "with context" })
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = editor.bufnr })
+editor = inline_editor.status()
+t.assert_eq(editor.rows, 2, "inline editor should grow with multiline content")
+inline_editor.submit()
+edited_claim = state.find_claim(path, "tight")
+	t.assert_eq(edited_claim.note, "inline rewrite\nwith context", "saving the inline editor should update the nearest claim")
+	t.assert_eq(inline_editor.status().active, false, "saving should close the inline editor")
+
+vim.api.nvim_win_set_cursor(0, { 1, 3 })
+doubt.edit_nearest_claim_note()
+editor = inline_editor.status()
+vim.api.nvim_buf_set_lines(editor.bufnr, 0, -1, false, { "discarded rewrite" })
+inline_editor.cancel()
+edited_claim = state.find_claim(path, "tight")
+t.assert_eq(edited_claim.note, "inline rewrite\nwith context", "cancelling inline editing should preserve the stored note")
+
 	vim.api.nvim_win_set_cursor(0, { 2, 4 })
 	doubt.claim_range("question")
-	t.assert_eq(captured_note_opts.line, 1, "new claim note editor should anchor to the current cursor line")
-	t.assert_eq(captured_note_opts.col, 0, "new claim note editor should anchor to the claim start column")
+	editor = inline_editor.status()
+	t.assert_eq(editor.active, true, "claim creation should open the inline editor")
+	t.assert_eq(editor.draft, true, "claim creation should remain a draft until saved")
+	t.assert_eq(editor.claim.start_line, 1, "new inline claim should anchor to the current cursor line")
+	t.assert_eq(editor.claim.start_col, 0, "new inline claim should anchor to the claim start column")
+	vim.api.nvim_buf_set_lines(editor.bufnr, 0, -1, false, { "new inline claim" })
+	inline_editor.submit()
+	local created_claim = nil
+	file_state = state.current_files()[path]
+	for _, candidate in ipairs(file_state.claims) do
+		if candidate.note == "new inline claim" then
+			created_claim = candidate
+			break
+		end
+	end
+	t.assert_eq(created_claim ~= nil, true, "saving a draft should create the claim")
+
+	local claim_count = #file_state.claims
+	vim.api.nvim_win_set_cursor(0, { 3, 2 })
+	doubt.claim_range("concern")
+	inline_editor.submit()
+	t.assert_eq(#file_state.claims, claim_count, "an untouched empty draft should be discarded")
+
+	local captured_note_opts
+	input.ask_note = function(opts, callback)
+		captured_note_opts = vim.deepcopy(opts)
+		callback("popup rewrite", false)
+	end
+	doubt.setup({
+		keymaps = false,
+		state_path = temp_state,
+		input = { mode = "popup" },
+	})
+	vim.api.nvim_win_set_cursor(0, { 1, 3 })
+	doubt.edit_nearest_claim_note()
+	edited_claim = state.find_claim(path, "tight")
+	t.assert_eq(edited_claim.note, "popup rewrite", "popup mode should retain the previous note editor")
+	t.assert_eq(captured_note_opts.default, "inline rewrite\nwith context", "popup fallback should preload the existing note")
+	t.assert_eq(captured_note_opts.line, 0, "popup fallback should anchor to the claim start line")
+	t.assert_eq(captured_note_opts.col, 2, "popup fallback should anchor to the claim start column")
 
 input.ask_note = original_ask_note
 

@@ -9,6 +9,7 @@ local diff_viewer = require("doubt.diff_viewer")
 local export = require("doubt.export")
 local healthcheck = require("doubt.healthcheck")
 local input = require("doubt.input")
+local inline_editor = require("doubt.inline_editor")
 local keymaps = require("doubt.keymaps")
 local panel = require("doubt.panel")
 local preferences = require("doubt.preferences")
@@ -84,6 +85,10 @@ local function add_claim(kind, opts)
 
 	-- Claims are always stored in normalized form before any UI refresh happens.
 	local file_state = state.ensure_file_entry(path)
+	if not file_state then
+		ctx.notify("No active doubt session", vim.log.levels.INFO)
+		return
+	end
 	local start_line, start_col, end_line, end_col =
 		claims.normalize_position_range(opts.start_line, opts.start_col, opts.end_line, opts.end_col)
 	local normalized = claims.normalize_claim({
@@ -112,12 +117,36 @@ local function resolve_note(kind, opts, callback)
 	end
 
 	local input_config = config.get().input or {}
-	local prompt = (claims.meta(kind) or {}).prompt or ((input_config.prompts or {})[kind])
 	local line = opts.line
 	local col = opts.col
 	if line == nil or col == nil then
 		line, col = current_cursor_position()
 	end
+	if input_config.mode ~= "popup" then
+		local claim = claims.normalize_claim({
+			id = opts.id or ("draft-" .. tostring(vim.uv.hrtime())),
+			kind = kind,
+			start_line = line,
+			start_col = col,
+			end_line = opts.end_line or line,
+			end_col = opts.end_col or col,
+			note = opts.default or "",
+			freshness = "fresh",
+		})
+		if inline_editor.open({
+			bufnr = opts.bufnr or vim.api.nvim_get_current_buf(),
+			claim = claim,
+			default = opts.default,
+			discard_empty = opts.discard_empty == true,
+			draft = opts.draft == true,
+			on_submit = callback,
+			winid = opts.winid,
+		}) then
+			return
+		end
+	end
+
+	local prompt = (claims.meta(kind) or {}).prompt or ((input_config.prompts or {})[kind])
 	input.ask_note({
 		border = input_config.border,
 		col = col,
@@ -182,7 +211,12 @@ local function claim_range(kind, opts)
 	local start_line, start_col, end_line, end_col = claims.current_span_from_command(opts, bufnr)
 	with_active_session(function()
 		resolve_note(kind, vim.tbl_extend("force", opts, {
+			bufnr = bufnr,
 			col = start_col,
+			discard_empty = true,
+			draft = true,
+			end_col = end_col,
+			end_line = end_line,
 			line = start_line,
 		}), function(note)
 			add_claim(kind, {
@@ -214,7 +248,12 @@ local function claim_visual(kind, opts)
 	leave_visual_mode()
 	with_active_session(function()
 		resolve_note(kind, vim.tbl_extend("force", opts, {
+			bufnr = bufnr,
 			col = start_col,
+			discard_empty = true,
+			draft = true,
+			end_col = end_col,
+			end_line = end_line,
 			line = start_line,
 		}), function(note)
 			add_claim(kind, {
@@ -254,6 +293,7 @@ function M.reject_visual(opts)
 end
 
 function M.clear_buffer()
+	inline_editor.close()
 	local bufnr = vim.api.nvim_get_current_buf()
 	local path = ctx.current_path(bufnr)
 	if not path then
@@ -279,6 +319,10 @@ function M.delete_claim(opts)
 	local claim = state.find_claim(opts.path, opts.id)
 	if not confirm("Delete doubt claim?") then
 		return
+	end
+	local editor = inline_editor.status()
+	if editor.active and not editor.draft and editor.claim.id == opts.id then
+		inline_editor.close()
 	end
 
 	if not state.delete_claim(opts.path, opts.id) then
@@ -413,6 +457,18 @@ function M.edit_nearest_claim_note(opts)
 	end
 
 	local input_config = config.get().input or {}
+	if input_config.mode ~= "popup" and inline_editor.open({
+		bufnr = target.bufnr,
+		claim = target.claim,
+		default = target.claim.note,
+		on_submit = function(note)
+			apply_note(claims.normalize_note(note))
+		end,
+		winid = vim.api.nvim_get_current_win(),
+	}) then
+		return
+	end
+
 	local prompt = (claims.meta(target.claim.kind) or {}).prompt or ((input_config.prompts or {})[target.claim.kind])
 	input.ask_note({
 		border = input_config.border,
@@ -825,6 +881,7 @@ function M.open_state_file()
 end
 
 function M.start_session(opts)
+	inline_editor.close()
 	opts = opts or {}
 
 	local function activate(session_name)
@@ -865,6 +922,7 @@ function M.start_session(opts)
 end
 
 function M.resume_session(opts)
+	inline_editor.close()
 	opts = opts or {}
 
 	local function activate(session_name)
@@ -915,6 +973,7 @@ function M.resume_session(opts)
 end
 
 function M.start_workspace_session(opts)
+	inline_editor.close()
 	opts = opts or {}
 
 	local function activate(session_name)
@@ -958,6 +1017,7 @@ function M.start_workspace_session(opts)
 end
 
 function M.resume_workspace_session(opts)
+	inline_editor.close()
 	opts = opts or {}
 
 	local function activate(session_name)
@@ -1011,6 +1071,7 @@ function M.resume_workspace_session(opts)
 end
 
 function M.stop_session()
+	inline_editor.close()
 	local session_name = state.active_session_name()
 	if not session_name then
 		ctx.notify("No active doubt session", vim.log.levels.INFO)
@@ -1032,6 +1093,9 @@ function M.delete_workspace_session(opts)
 		local deleting_active = session_name == state.active_session_name() and state.active_session_source() == "workspace"
 		if not confirm(string.format("Delete doubt workspace session '%s'?", session_name)) then
 			return
+		end
+		if deleting_active then
+			inline_editor.close()
 		end
 
 		if not state.delete_workspace_session(session_name) then
@@ -1081,6 +1145,9 @@ function M.delete_session(opts)
 		local deleting_active = session_name == state.active_session_name()
 		if not confirm(string.format("Delete doubt session '%s'?", session_name)) then
 			return
+		end
+		if deleting_active then
+			inline_editor.close()
 		end
 
 		if not state.delete_session(session_name) then
@@ -1279,6 +1346,7 @@ function M.rename_workspace_session(opts)
 end
 
 function M.setup(opts)
+	inline_editor.close()
 	ctx.api = M
 	deleted_claim_stack = {}
 	clear_live_edit_timers()
@@ -1287,6 +1355,11 @@ function M.setup(opts)
 	claims.configure(config.get().claim_kinds)
 	local workspace = ctx.normalize_path(vim.fn.getcwd())
 	state.load(config.get(), ctx.normalize_path, ctx.notify, workspace)
+	inline_editor.setup({
+		config = config,
+		ctx = ctx,
+		input = input,
+	})
 	ctx.invalidate_review_run_inspection()
 	ctx.set_inline_notes_layout(preferences.load(config.get(), ctx.notify).inline_notes_layout or "block")
 	vim.api.nvim_clear_autocmds({ group = ctx.augroup })
@@ -1303,7 +1376,9 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
 		group = ctx.augroup,
 		callback = function()
-			ctx.refresh_ui()
+			if not inline_editor.refresh() then
+				ctx.refresh_ui()
+			end
 		end,
 	})
 

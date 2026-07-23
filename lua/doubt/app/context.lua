@@ -11,6 +11,7 @@ function M.new(deps)
 		api = nil,
 		expanded_claim = nil,
 		focused_claim = nil,
+		inline_edit = nil,
 		inline_notes_layout_name = "block",
 		live_edit_timers = {},
 		review_runs = deps.review_runs,
@@ -78,6 +79,14 @@ function M.new(deps)
 
 	function ctx.clear_focused_claim()
 		ctx.focused_claim = nil
+	end
+
+	function ctx.current_inline_edit()
+		return ctx.inline_edit
+	end
+
+	function ctx.set_inline_edit(edit)
+		ctx.inline_edit = edit
 	end
 
 	function ctx.set_focused_claim(session_name, path, claim_id)

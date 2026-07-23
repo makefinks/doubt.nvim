@@ -198,9 +198,23 @@ function M.ask_command_text(opts, callback)
 	callback(vim.trim(value or ""), false)
 end
 
+function M.pick_file_reference(opts, callback)
+	opts = opts or {}
+	local files = opts.files or workspace_files(opts.root or opts.cwd or vim.fn.getcwd())
+	if vim.tbl_isempty(files) then
+		vim.notify("No files found to reference", vim.log.levels.INFO, { title = "doubt.nvim" })
+		callback(nil)
+		return
+	end
+
+	vim.ui.select(files, {
+		kind = "file",
+		prompt = opts.file_prompt or "Reference file",
+	}, callback)
+end
+
 function M.ask_note(opts, callback)
 	opts = opts or {}
-	local file_root = opts.root or opts.cwd or vim.fn.getcwd()
 	local anchor_line = math.max(tonumber(opts.line) or 0, 0)
 	local anchor_col = math.max(tonumber(opts.col) or 0, 0)
 	local width = note_editor_width(opts)
@@ -298,17 +312,8 @@ function M.ask_note(opts, callback)
 
 	local function pick_file_reference()
 		local insert_position = vim.api.nvim_win_get_cursor(winid)
-		local files = opts.files or workspace_files(file_root)
-		if vim.tbl_isempty(files) then
-			vim.notify("No files found to reference", vim.log.levels.INFO, { title = "doubt.nvim" })
-			return
-		end
-
 		picker_open = true
-		vim.ui.select(files, {
-			kind = "file",
-			prompt = opts.file_prompt or "Reference file",
-		}, function(path)
+		M.pick_file_reference(opts, function(path)
 			picker_open = false
 			if path then
 				insert_text_at_cursor("`@" .. path .. "` ", insert_position)

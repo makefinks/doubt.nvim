@@ -260,12 +260,70 @@ local function claim_end_col(bufnr, claim, end_row)
 	return line_byte_length(bufnr, end_row)
 end
 
+function M.render_inline_editor(ctx, bufnr, edit)
+	local claim = edit.claim
+	local meta = claims.meta(claim.kind)
+	local config = ctx.config.get()
+	local start_row, end_row = claim_rows(bufnr, claim)
+	local start_col = clamp_col(bufnr, start_row, claim.start_col)
+	local prefix = config.inline_notes.prefix or ""
+	local inline_label = (claims.inline_text(claim))
+	local label_width = display_width(inline_label)
+	local body_width = math.max(edit.body_width or config.inline_notes.max_width or 1, 1)
+	local editing_badge = " EDITING "
+	local content_width = math.max(label_width + body_width + 2, display_width(editing_badge))
+	local right_border_width = content_width - label_width - body_width - 1
+	local rows = math.max(edit.rows or 1, 1)
+	local virt_lines = {
+		{
+			{ prefix, "DoubtInlinePrefix" },
+			{ pad(content_width - display_width(editing_badge)), "DoubtInlineEditingBar" },
+			{ editing_badge, "DoubtInlineEditingBadge" },
+		},
+	}
+
+	for row = 1, rows do
+		table.insert(virt_lines, {
+			{ prefix, "DoubtInlinePrefix" },
+			{ row == 1 and inline_label or pad(label_width), row == 1 and meta.inline_label_hl or "DoubtInlineEditingBar" },
+			{ " ", meta.inline_text_hl },
+			{ pad(body_width), meta.inline_text_hl },
+			{ pad(right_border_width), "DoubtInlineEditingBar" },
+		})
+	end
+	table.insert(virt_lines, {
+		{ prefix, "DoubtInlinePrefix" },
+		{ pad(content_width), "DoubtInlineEditingBar" },
+	})
+
+	vim.api.nvim_buf_set_extmark(bufnr, ctx.ns, start_row, start_col, {
+		end_row = end_row,
+		end_col = claim_end_col(bufnr, claim, end_row),
+		hl_group = meta.hl,
+		hl_eol = true,
+		priority = 120,
+	})
+	vim.api.nvim_buf_set_extmark(bufnr, ctx.ns, start_row, start_col, {
+		sign_text = meta.sign or config.signs[claim.kind] or config.signs.file,
+		sign_hl_group = meta.hl,
+		priority = 150,
+		virt_lines = virt_lines,
+		virt_lines_above = true,
+	})
+end
+
 function M.clear_buffer_claims(ctx, bufnr)
 	vim.api.nvim_buf_clear_namespace(bufnr, ctx.ns, 0, -1)
 end
 
 -- Each claim paints its range and places a sign at the first line.
 function M.render_claim(ctx, bufnr, claim)
+	local inline_edit = ctx.current_inline_edit and ctx.current_inline_edit() or nil
+	if inline_edit and inline_edit.bufnr == bufnr and inline_edit.claim.id == claim.id then
+		M.render_inline_editor(ctx, bufnr, inline_edit)
+		return
+	end
+
 	local meta = claims.meta(claim.kind)
 	local config = ctx.config.get()
 	local path = ctx.current_path(bufnr)
@@ -447,12 +505,21 @@ function M.refresh_buffer(ctx, bufnr)
 
 	local file_state = ctx.state.current_files()[path]
 	if not file_state or vim.tbl_isempty(file_state.claims or {}) then
+		local inline_edit = ctx.current_inline_edit and ctx.current_inline_edit() or nil
+		if inline_edit and inline_edit.bufnr == bufnr and inline_edit.draft then
+			M.render_inline_editor(ctx, bufnr, inline_edit)
+		end
 		return
 	end
 
 	M.render_file_sign(ctx, bufnr)
 	for _, claim in ipairs(file_state.claims or {}) do
 		M.render_claim(ctx, bufnr, claim)
+	end
+
+	local inline_edit = ctx.current_inline_edit and ctx.current_inline_edit() or nil
+	if inline_edit and inline_edit.bufnr == bufnr and inline_edit.draft then
+		M.render_inline_editor(ctx, bufnr, inline_edit)
 	end
 end
 
