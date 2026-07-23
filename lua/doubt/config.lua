@@ -22,6 +22,7 @@ local DEFAULTS = {
 				"You are coordinating a response to feedback the reviewer has provided.",
 				"Fetch every referenced file and line from the repository before assigning claim specific work.",
 				"Triage each claim and delegate explanation or revision work as needed.",
+				"Do not instruct delegated agents to write the results manifest or run the completion helper; consolidate their responses and perform those final steps yourself.",
 				"You should act as a coordinator that delegates work and consolidates the individual responses from subagents into a final response for the user.",
 				"After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process.",
 				"",
@@ -205,6 +206,11 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtInlinePrefix", { fg = "#7F8794" })
 	vim.api.nvim_set_hl(0, "DoubtInlineBar", { bg = "#000000", fg = "#000000" })
 	vim.api.nvim_set_hl(0, "DoubtInlineAddressed", { fg = "#78A98A", bg = "#13251B" })
+	vim.api.nvim_set_hl(0, "DoubtInlineResponseWarning", { fg = "#F6C453", bg = "#302A1F" })
+	vim.api.nvim_set_hl(0, "DoubtInlineAgentResponseLabel", { fg = "#78A98A", bg = "#000000" })
+	vim.api.nvim_set_hl(0, "DoubtInlineAgentResponseText", { fg = "#A8B3C2", bg = "#000000" })
+	vim.api.nvim_set_hl(0, "DoubtInlineAgentResponseWarningLabel", { fg = "#D4A373", bg = "#000000" })
+	vim.api.nvim_set_hl(0, "DoubtInlineAgentResponseWarningText", { fg = "#A8B3C2", bg = "#000000" })
 	vim.api.nvim_set_hl(0, "DoubtInlineEditingBar", { fg = "#0B0F14", bg = "#0B0F14" })
 	vim.api.nvim_set_hl(0, "DoubtInlineEditingBadge", { fg = "#E2E8F0", bg = "#0B0F14", bold = true })
 	for kind, meta in pairs(config.claim_kinds or {}) do

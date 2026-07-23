@@ -73,6 +73,8 @@ t.assert_match(inline_text, "^%[stale%] stale note$", "stale inline text should 
 local _, fresh_inline_text = claims.inline_text(file_state.claims[1])
 t.assert_eq(fresh_inline_text, "fresh note", "fresh inline text should remain unchanged")
 
+local expanded_claim_id = "stale-claim"
+local inline_notes_layout = "block"
 local render_ctx = {
 	ns = vim.api.nvim_create_namespace("doubt.test.stale-ui"),
 	config = require("doubt.config"),
@@ -80,7 +82,10 @@ local render_ctx = {
 		return path
 	end,
 	is_claim_expanded = function(_, claim)
-		return claim.id == "stale-claim"
+		return claim.id == expanded_claim_id
+	end,
+	inline_notes_layout = function()
+		return inline_notes_layout
 	end,
 }
 
@@ -124,6 +129,7 @@ render_ctx.claim_review_status = function(id)
 		}
 	end
 end
+inline_notes_layout = "inline"
 render.clear_buffer_claims(render_ctx, bufnr)
 render.render_claim(render_ctx, bufnr, file_state.claims[2])
 
@@ -147,6 +153,68 @@ t.assert_eq(addressed_inline_text:match("changed"), nil, "the top badge should n
 t.assert_match(addressed_inline_text, "stale note", "the review badge should leave the note unchanged")
 t.assert_eq(addressed_sign.virt_lines[1][#addressed_sign.virt_lines[1]][2], "DoubtInlineAddressed", "addressed outcomes should use a distinct badge style")
 t.assert_eq(addressed_inline_text:match("%[stale%]"), nil, "addressed source annotations should suppress stale markers")
+local addressed_response_text = ""
+for _, line in ipairs(addressed_sign.virt_lines) do
+	addressed_response_text = addressed_response_text .. "\n" .. virt_line_text(line)
+end
+t.assert_match(addressed_response_text, "Agent response", "expanded claims should show an agent response section")
+t.assert_match(addressed_response_text, "Updated the implementation%.", "expanded claims should show the full agent response")
+t.assert_eq(addressed_sign.virt_lines_above, true, "expanded responses should use wrapped virtual lines in end-of-line mode")
+
+expanded_claim_id = nil
+render_ctx.claim_review_status = function(id)
+	if id == "stale-claim" then
+		return {
+			addressed = true,
+			outcome = "answered",
+			summary = "This response should remain hidden while collapsed.",
+		}
+	end
+end
+inline_notes_layout = "inline"
+render.clear_buffer_claims(render_ctx, bufnr)
+render.render_claim(render_ctx, bufnr, file_state.claims[2])
+
+local collapsed_answered_sign
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, render_ctx.ns, 0, -1, { details = true })) do
+	local details = mark[4] or {}
+	if details.sign_text and vim.startswith(details.sign_text, claims.meta("question").sign) then
+		collapsed_answered_sign = details
+	end
+end
+local collapsed_answered_text = virt_line_text(collapsed_answered_sign.virt_text)
+t.assert_match(collapsed_answered_text, "answered", "collapsed claims should retain their response outcome badge")
+t.assert_eq(collapsed_answered_text:match("Agent response"), nil, "collapsed answered claims should hide the response preview")
+t.assert_eq(collapsed_answered_text:match("remain hidden"), nil, "collapsed answered claims should hide response text")
+
+render_ctx.claim_review_status = function(id)
+	if id == "stale-claim" then
+		return {
+			addressed = false,
+			outcome = "needs_input",
+			summary = "Choose whether this behavior should remain configurable.",
+		}
+	end
+end
+inline_notes_layout = "block"
+render.clear_buffer_claims(render_ctx, bufnr)
+render.render_claim(render_ctx, bufnr, file_state.claims[2])
+
+local needs_input_sign
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, render_ctx.ns, 0, -1, { details = true })) do
+	local details = mark[4] or {}
+	if details.sign_text and vim.startswith(details.sign_text, claims.meta("question").sign) then
+		needs_input_sign = details
+	end
+end
+local needs_input_text = ""
+for _, line in ipairs(needs_input_sign.virt_lines) do
+	needs_input_text = needs_input_text .. "\n" .. virt_line_text(line)
+end
+t.assert_match(needs_input_text, "needs input", "collapsed needs-input claims should show a warning badge")
+t.assert_match(needs_input_text, "Agent response", "collapsed needs-input claims should show a response preview")
+t.assert_match(needs_input_text, "Choose whether", "collapsed needs-input claims should include response text")
+t.assert_eq(needs_input_sign.virt_lines[1][#needs_input_sign.virt_lines[1]][2], "DoubtInlineResponseWarning", "needs-input outcomes should use warning badge styling")
 
 local lines = panel.build_lines({
 	config = require("doubt.config"),

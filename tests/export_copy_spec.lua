@@ -127,6 +127,7 @@ vim.cmd("DoubtExport multi_agent")
 local multi_agent = vim.fn.getreg("a")
 t.assert_match(multi_agent, "^You are coordinating a response to feedback the reviewer has provided%.", "multi_agent export should prepend the coordinator instructions")
 t.assert_match(multi_agent, "Triage each claim and delegate explanation or revision work as needed%.", "multi_agent export should include the triage guidance")
+t.assert_match(multi_agent, "Do not instruct delegated agents to write the results manifest or run the completion helper", "multi_agent export should keep manifest publication with the coordinator")
 t.assert_match(multi_agent, "without repeating the claims or narrating your process", "multi_agent export should avoid repetitive process narration")
 t.assert_match(multi_agent, "\n<doubt session=\"copy%-review\">", "multi_agent export should still include the xml payload")
 

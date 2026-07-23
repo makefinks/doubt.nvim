@@ -85,6 +85,11 @@ t.assert_match(
 )
 	t.assert_match(
 		multi_agent_text,
+		"Do not instruct delegated agents to write the results manifest or run the completion helper; consolidate their responses and perform those final steps yourself%.",
+		"multi_agent should reserve review-run completion for the coordinator"
+	)
+	t.assert_match(
+		multi_agent_text,
 		"After addressing the claims and writing any required results manifest, give a concise outcome summary without repeating the claims or narrating your process%.",
 		"multi_agent should request a concise outcome without process narration"
 	)

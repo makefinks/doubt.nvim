@@ -342,10 +342,17 @@ function M.render_claim(ctx, bufnr, claim)
 		inline_text_hl = meta.dim_inline_text_hl or inline_text_hl
 	end
 	local inline_label, inline_text = claims.inline_text(claim, { hide_freshness = addressed })
-	local review_badge = addressed
-		and string.format(" %s ", (review_status.outcome or "addressed"):gsub("_", " "))
-		or nil
 	local expanded = ctx.is_claim_expanded and ctx.is_claim_expanded(ctx.current_path(bufnr), claim)
+	local response_summary = review_status and vim.trim(review_status.summary or "") or ""
+	local has_response = response_summary ~= ""
+	local show_response = has_response and (expanded or review_status.outcome == "needs_input")
+	local response_label_hl = addressed and "DoubtInlineAgentResponseLabel" or "DoubtInlineAgentResponseWarningLabel"
+	local response_text_hl = addressed and "DoubtInlineAgentResponseText" or "DoubtInlineAgentResponseWarningText"
+	local review_badge_hl = addressed and "DoubtInlineAddressed" or "DoubtInlineResponseWarning"
+	local review_badge = review_status
+		and review_status.outcome
+		and string.format(" %s ", review_status.outcome:gsub("_", " "))
+		or nil
 	local body_lines = expanded
 		and wrap_inline_text(inline_text, config.inline_notes.max_width)
 		or compact_inline_lines(inline_text, config.inline_notes.max_width, 2)
@@ -356,16 +363,36 @@ function M.render_claim(ctx, bufnr, claim)
 	local right_padding = math.max(config.inline_notes.padding_right or 0, 0)
 	local prefix = config.inline_notes.prefix or ""
 	local inline_notes_layout = ctx.inline_notes_layout and ctx.inline_notes_layout() or "block"
-	local render_block_notes = config.inline_notes.enabled and inline_notes_layout == "block"
+	local render_block_notes = config.inline_notes.enabled
+		and (inline_notes_layout == "block" or (expanded and has_response))
 	local inline_note = config.inline_notes.enabled
 		and inline_notes_layout == "inline"
+		and not render_block_notes
 		and (expanded and inline_text or compact_inline_text(inline_text, config.inline_notes.max_width))
 		or nil
+	local response_rows = {}
+	if show_response then
+		if expanded then
+			table.insert(response_rows, { { "Agent response", response_label_hl } })
+			for _, response_line in ipairs(wrap_inline_text(response_summary, config.inline_notes.max_width)) do
+				table.insert(response_rows, prefixed_markdown_chunks("  ", response_line, response_text_hl))
+			end
+		else
+			local response_prefix = "Agent response  "
+			local preview_width = math.max((config.inline_notes.max_width or 1) - display_width(response_prefix), 1)
+			local row = { { response_prefix, response_label_hl } }
+			append_chunks(row, prefixed_markdown_chunks("", compact_inline_text(response_summary, preview_width), response_text_hl))
+			table.insert(response_rows, row)
+		end
+	end
 	local label_width = display_width(inline_label)
 	local heading_chunks = { { inline_label, inline_label_hl } }
 	local content_width = 0
 	for idx in ipairs(body_lines) do
 		content_width = math.max(content_width, label_width + chunks_width(body_chunks[idx]))
+	end
+	for _, response_row in ipairs(response_rows) do
+		content_width = math.max(content_width, chunks_width(response_row))
 	end
 	content_width = math.max(content_width + right_padding, display_width(review_badge))
 	local first_content_chunks = append_chunks({}, heading_chunks)
@@ -376,10 +403,16 @@ function M.render_claim(ctx, bufnr, claim)
 		if review_badge then
 			append_chunks(inline_chunks, {
 				{ " ", "DoubtInlineBar" },
-				{ review_badge, "DoubtInlineAddressed" },
+				{ review_badge, review_badge_hl },
 			})
 		end
 		append_chunks(inline_chunks, prefixed_markdown_chunks(" ", inline_note, inline_text_hl))
+		if show_response then
+			local response_prefix = "  Agent response  "
+			local preview_width = math.max((config.inline_notes.max_width or 1) - display_width(response_prefix), 1)
+			table.insert(inline_chunks, { response_prefix, response_label_hl })
+			append_chunks(inline_chunks, prefixed_markdown_chunks("", compact_inline_text(response_summary, preview_width), response_text_hl))
+		end
 	end
 	local top_row = {
 		{
@@ -392,7 +425,7 @@ function M.render_claim(ctx, bufnr, claim)
 		if badge_padding > 0 then
 			table.insert(top_row, { pad(badge_padding), "DoubtInlineBar" })
 		end
-		table.insert(top_row, { review_badge, "DoubtInlineAddressed" })
+		table.insert(top_row, { review_badge, review_badge_hl })
 	else
 		table.insert(top_row, { pad(content_width), "DoubtInlineBar" })
 	end
@@ -445,6 +478,26 @@ function M.render_claim(ctx, bufnr, claim)
 			table.insert(virt_lines, {
 				unpack(row),
 			})
+		end
+	end
+
+	if virt_lines then
+		if #response_rows > 0 then
+			table.insert(virt_lines, {
+				{ prefix, "DoubtInlinePrefix" },
+				{ pad(content_width), response_text_hl },
+			})
+		end
+		for _, response_row in ipairs(response_rows) do
+			local row_width = chunks_width(response_row)
+			local row = {
+				{ prefix, "DoubtInlinePrefix" },
+				unpack(response_row),
+			}
+			if row_width < content_width then
+				table.insert(row, { pad(content_width - row_width), response_text_hl })
+			end
+			table.insert(virt_lines, row)
 		end
 	end
 
