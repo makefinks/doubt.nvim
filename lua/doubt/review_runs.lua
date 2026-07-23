@@ -43,7 +43,12 @@ local function git_root(workspace)
 	if not root or root == "" then
 		return nil
 	end
-	return vim.fs.normalize(root)
+	root = vim.fs.normalize(root)
+	local requested = vim.fs.normalize(workspace)
+	if vim.uv.fs_realpath(root) == vim.uv.fs_realpath(requested) then
+		return requested
+	end
+	return root
 end
 
 local function path_inside(root, path)
@@ -57,6 +62,25 @@ local function relative_path(root, path)
 		return nil
 	end
 	return path:sub(#root + 2)
+end
+
+local function prefer_file_root_alias(root, files)
+	local real_root = vim.uv.fs_realpath(root)
+	if not real_root then
+		return root
+	end
+	for path in pairs(files or {}) do
+		local normalized = vim.fs.normalize(path)
+		local real_path = vim.uv.fs_realpath(normalized)
+		if real_path and vim.startswith(real_path, real_root .. "/") then
+			local relative = real_path:sub(#real_root + 2)
+			local candidate = normalized:sub(1, #normalized - #relative - 1)
+			if vim.uv.fs_realpath(candidate) == real_root then
+				return candidate
+			end
+		end
+	end
+	return root
 end
 
 local function read_json(path)
@@ -270,6 +294,7 @@ function M.create(opts)
 	if not root then
 		return nil, "Review-run diffs require a Git repository"
 	end
+	root = prefer_file_root_alias(root, opts.files)
 	local exported_claims = normalize_exported_claims(root, opts.files)
 	if not exported_claims or vim.tbl_isempty(exported_claims) then
 		return nil, "Exported claims must be inside the Git workspace"
