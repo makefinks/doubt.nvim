@@ -118,11 +118,20 @@ local function codediff_viewer(payload)
 		end
 	end
 
+	local source_win = vim.api.nvim_get_current_win()
+	local source_number = vim.wo[source_win].number
+	local source_relativenumber = vim.wo[source_win].relativenumber
+	vim.wo[source_win].number = true
+	vim.wo[source_win].relativenumber = false
 	local ok, err = pcall(vim.cmd, string.format(
 		"CodeDiff dir %s %s",
 		vim.fn.fnameescape(vim.fs.joinpath(root, "before")),
 		vim.fn.fnameescape(vim.fs.joinpath(root, "after"))
 	))
+	if vim.api.nvim_win_is_valid(source_win) then
+		vim.wo[source_win].number = source_number
+		vim.wo[source_win].relativenumber = source_relativenumber
+	end
 	if not ok then
 		cleanup_directory(root)
 		return false, tostring(err)
@@ -212,7 +221,11 @@ function M.open(opts)
 	if type(result) ~= "table" or type(result.status) ~= "table" then
 		return false, "Invalid doubt claim diff"
 	end
-	local files, has_file_level_change = build_file_pairs(result.status.matches)
+	local files = result.files
+	local has_file_level_change = result.has_file_level_change
+	if type(files) ~= "table" then
+		files, has_file_level_change = build_file_pairs(result.status.matches)
+	end
 	local payload = {
 		claim_id = opts.claim_id,
 		files = files,

@@ -911,6 +911,96 @@ local function render_claim_patch(run, claim_id, status)
 	return lines
 end
 
+local function tree_file_lines(root, tree, path)
+	local result = vim.system({ "git", "-C", root, "show", tree .. ":" .. path }, { text = true }):wait()
+	if result.code ~= 0 then
+		return nil, vim.trim(result.stderr or "")
+	end
+	if result.stdout == "" then
+		return {}
+	end
+	local lines = vim.split(result.stdout, "\n", { plain = true, trimempty = false })
+	if result.stdout:sub(-1) == "\n" then
+		table.remove(lines)
+	end
+	return lines
+end
+
+local function hunk_result_lines(hunk)
+	local lines = {}
+	for index, line in ipairs(hunk.lines or {}) do
+		if index > 1 then
+			local marker = line:sub(1, 1)
+			if marker == " " or marker == "+" then
+				table.insert(lines, line:sub(2))
+			end
+		end
+	end
+	return lines
+end
+
+local function apply_hunks(lines, hunks)
+	local result = vim.deepcopy(lines)
+	table.sort(hunks, function(left, right)
+		return left.old_start > right.old_start
+	end)
+	for _, hunk in ipairs(hunks) do
+		local start = hunk.old_count == 0 and hunk.old_start + 1 or hunk.old_start
+		for _ = 1, hunk.old_count do
+			table.remove(result, start)
+		end
+		local replacement = hunk_result_lines(hunk)
+		for index = #replacement, 1, -1 do
+			table.insert(result, start, replacement[index])
+		end
+	end
+	return result
+end
+
+local function build_claim_file_pairs(run, matches)
+	local by_path = {}
+	local has_file_level_change = false
+	for _, match in ipairs(matches or {}) do
+		if not match.hunk then
+			has_file_level_change = true
+		else
+			local path = match.file.new_path or match.file.old_path or match.file.path
+			if type(path) == "string" and path ~= "" then
+				local pair = by_path[path]
+				if not pair then
+					pair = {
+						path = path,
+						source_path = match.file.old_path or match.file.path,
+						created = match.file.created,
+						hunks = {},
+					}
+					by_path[path] = pair
+				end
+				table.insert(pair.hunks, match.hunk)
+			end
+		end
+	end
+
+	local pairs = vim.tbl_values(by_path)
+	table.sort(pairs, function(left, right)
+		return left.path < right.path
+	end)
+	for _, pair in ipairs(pairs) do
+		local before, err = tree_file_lines(run.root, run.baseline.object, pair.source_path)
+		if not before and pair.created then
+			before = {}
+		elseif not before then
+			return nil, has_file_level_change, err
+		end
+		pair.before = before
+		pair.after = apply_hunks(before, pair.hunks)
+		pair.source_path = nil
+		pair.created = nil
+		pair.hunks = nil
+	end
+	return pairs, has_file_level_change
+end
+
 function M.claim_diff(opts)
 	opts = opts or {}
 	local result, err = inspect(opts)
@@ -930,7 +1020,13 @@ function M.claim_diff(opts)
 			or "The agent reported no code changes for this claim"
 	end
 	local run = status.run or result.run
+	local files, has_file_level_change, files_error = build_claim_file_pairs(run, status.matches)
+	if not files then
+		return nil, "Unable to prepare full claim diff context: " .. (files_error or "unknown error")
+	end
 	return {
+		files = files,
+		has_file_level_change = has_file_level_change,
 		lines = render_claim_patch(run, opts.claim_id, status),
 		run = run,
 		status = status,

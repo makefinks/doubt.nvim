@@ -5,11 +5,39 @@ describe("diff viewer adapters", function()
 		local diff_viewer = require("doubt.diff_viewer")
 		pcall(vim.api.nvim_del_user_command, "CodeDiff")
 		local command_args = nil
+		local launch_number = nil
+		local launch_relativenumber = nil
 		vim.api.nvim_create_user_command("CodeDiff", function(opts)
 			command_args = opts.fargs
+			launch_number = vim.wo.number
+			launch_relativenumber = vim.wo.relativenumber
 		end, { nargs = "+" })
+		local original_number = vim.wo.number
+		local original_relativenumber = vim.wo.relativenumber
+		vim.wo.number = false
+		vim.wo.relativenumber = true
 
 		local result = {
+			files = {
+				{
+					path = "lua/example.lua",
+					before = {
+						"local M = {}",
+						"local value = load()",
+						"return value",
+						"return M",
+					},
+					after = {
+						"local M = {}",
+						"local value = load()",
+						"if value == nil then",
+						"\treturn nil",
+						"end",
+						"return M",
+					},
+				},
+			},
+			has_file_level_change = false,
 			run = { run_id = "run-test" },
 			lines = { "claim patch" },
 			status = {
@@ -36,22 +64,35 @@ describe("diff viewer adapters", function()
 			viewer = "codediff",
 		})
 		t.assert_eq(opened, true, "CodeDiff adapter should accept textual claim hunks")
+		t.assert_eq(launch_number, true, "CodeDiff should inherit visible line numbers when opened from the panel")
+		t.assert_eq(launch_relativenumber, false, "CodeDiff should use absolute line numbers")
+		t.assert_eq(vim.wo.number, false, "opening CodeDiff should restore the source window's number option")
+		t.assert_eq(vim.wo.relativenumber, true, "opening CodeDiff should restore the source window's relativenumber option")
 		t.assert_eq(command_args[1], "dir", "CodeDiff adapter should use directory comparison mode")
 		local before_dir = command_args[2]
 		local after_dir = command_args[3]
 		local before = vim.fn.readfile(vim.fs.joinpath(before_dir, "lua", "example.lua"))
 		local after = vim.fn.readfile(vim.fs.joinpath(after_dir, "lua", "example.lua"))
-		t.assert_eq(before, { "local value = load()", "return value" }, "before tree should contain only attributed hunk lines")
+		t.assert_eq(before, {
+			"local M = {}",
+			"local value = load()",
+			"return value",
+			"return M",
+		}, "before tree should retain full-file context")
 		t.assert_eq(after, {
+			"local M = {}",
 			"local value = load()",
 			"if value == nil then",
 			"\treturn nil",
 			"end",
-		}, "after tree should contain only attributed hunk lines")
+			"return M",
+		}, "after tree should retain context around attributed changes")
 
 		vim.api.nvim_exec_autocmds("User", { pattern = "CodeDiffClose" })
 		t.assert_eq(vim.uv.fs_stat(vim.fs.dirname(before_dir)), nil, "closing CodeDiff should remove synthetic trees")
 		vim.api.nvim_del_user_command("CodeDiff")
+		vim.wo.number = original_number
+		vim.wo.relativenumber = original_relativenumber
 	end)
 
 	it("exposes a viewer-neutral payload to custom adapters", function()

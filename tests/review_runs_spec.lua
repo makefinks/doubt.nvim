@@ -232,6 +232,28 @@ describe("review runs", function()
 		t.assert_match(patch, "tests/repository_spec%.lua", "claim diff should include new tests")
 		t.assert_match(patch, "new mode 100755", "claim diff should include a mode-only change")
 		t.assert_match(patch, "Extracted repository access", "claim diff should include the agent summary")
+		local session_pair = nil
+		for _, pair in ipairs(claim_diff.files) do
+			if pair.path == "lua/session.lua" then
+				session_pair = pair
+				break
+			end
+		end
+		t.assert_eq(session_pair.before, {
+			"local M = {}",
+			"function M.load()",
+			"\treturn read_state()",
+			"end",
+			"return M",
+		}, "claim diff files should include the complete baseline file")
+		t.assert_eq(session_pair.after, {
+			"local repository = require('session.repository')",
+			"local M = {}",
+			"function M.load()",
+			"\treturn repository.read()",
+			"end",
+			"return M",
+		}, "claim diff files should apply attributed hunks while retaining unchanged context")
 
 		local no_diff, no_diff_error = review_runs.claim_diff({
 			workspace = root,
