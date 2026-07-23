@@ -15,7 +15,7 @@ end
 
 local function xml_line(claim, review_run)
 	local id_line = ""
-	if review_run and type(claim.id) == "string" and claim.id ~= "" then
+	if type(claim.id) == "string" and claim.id ~= "" then
 		id_line = string.format('    id="%s"\n', xml_escape(claim.id))
 	end
 	return string.format(

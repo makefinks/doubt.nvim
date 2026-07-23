@@ -230,6 +230,35 @@ local function set_mappings(bufnr)
 			end)
 		end)
 	end, vim.tbl_extend("force", opts, { desc = "Insert a file reference" }))
+	vim.keymap.set("i", "#", function()
+		if not active or not deps.input then
+			return
+		end
+		local editor_winid = active.editor_winid
+		local position = vim.api.nvim_win_get_cursor(editor_winid)
+		active.picker_open = true
+		deps.input.pick_claim_reference({
+			claims = active.claim_references,
+		}, function(claim_id)
+			if not active or active.editor_winid ~= editor_winid then
+				return
+			end
+			active.picker_open = false
+			if claim_id then
+				local row = position[1] - 1
+				local text = "`#" .. claim_id .. "` "
+				vim.api.nvim_buf_set_text(active.editor_bufnr, row, position[2], row, position[2], { text })
+				vim.api.nvim_win_set_cursor(editor_winid, { position[1], position[2] + #text })
+			end
+			vim.schedule(function()
+				if active and valid_win(editor_winid) then
+					vim.api.nvim_set_current_win(editor_winid)
+					vim.cmd("startinsert!")
+					refresh_layout()
+				end
+			end)
+		end)
+	end, vim.tbl_extend("force", opts, { desc = "Reference another doubt claim" }))
 end
 
 local function install_autocmds()
@@ -320,13 +349,14 @@ function M.open(opts)
 
 	active = {
 		claim = vim.deepcopy(opts.claim),
+		claim_references = vim.deepcopy(opts.claim_references or {}),
 		discard_empty = opts.discard_empty == true,
 		draft = opts.draft == true,
 		editor_bufnr = editor_bufnr,
 		editor_winid = nil,
 		on_cancel = opts.on_cancel,
-			on_submit = opts.on_submit,
-			picker_open = false,
+		on_submit = opts.on_submit,
+		picker_open = false,
 		source_bufnr = opts.bufnr,
 		source_cursor = vim.api.nvim_win_get_cursor(winid),
 		source_winid = winid,

@@ -263,6 +263,7 @@ local function load_session(name)
 	end
 
 	visit(dir)
+	claims.normalize_session_claim_ids(session.files)
 	session_cache[name] = session
 	return session
 end

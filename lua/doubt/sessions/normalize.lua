@@ -49,7 +49,6 @@ function M.normalize_session_state(session_state)
 			files[path] = normalized_file_state
 		end
 	end
-
 	return { files = files }
 end
 
@@ -67,6 +66,7 @@ function M.normalize_single_workspace_state(decoded, normalize_path)
 					normalized_session_state.files[normalized_path] = normalized_file_state
 				end
 			end
+			claims.normalize_session_claim_ids(normalized_session_state.files)
 
 			loaded_state.sessions[normalized_name] = normalized_session_state
 		end

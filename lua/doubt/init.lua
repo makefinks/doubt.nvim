@@ -92,7 +92,7 @@ local function add_claim(kind, opts)
 	local start_line, start_col, end_line, end_col =
 		claims.normalize_position_range(opts.start_line, opts.start_col, opts.end_line, opts.end_col)
 	local normalized = claims.normalize_claim({
-		id = tostring(vim.uv.hrtime()),
+		id = claims.next_session_claim_id(state.current_files(), kind),
 		kind = claims.normalize_claim_kind(kind),
 		start_line = start_line,
 		start_col = start_col,
@@ -107,6 +107,33 @@ local function add_claim(kind, opts)
 
 	state.save(config.get(), ctx.notify)
 	ctx.refresh_ui(opts.bufnr)
+end
+
+local function claim_reference_items(exclude_id)
+	local items = {}
+	local paths = vim.tbl_keys(state.current_files() or {})
+	table.sort(paths)
+	for _, path in ipairs(paths) do
+		for _, claim in ipairs((state.current_files()[path] or {}).claims or {}) do
+			if claim.id ~= exclude_id then
+				local note = (claim.note or ""):gsub("%s+", " ")
+				if vim.fn.strchars(note) > 60 then
+					note = vim.fn.strcharpart(note, 0, 57) .. "..."
+				end
+				table.insert(items, {
+					id = claim.id,
+					label = string.format(
+						"%-9s %s:%d  %s",
+						(claim.kind or "claim"):upper(),
+						vim.fn.fnamemodify(path, ":."),
+						(claim.start_line or 0) + 1,
+						note
+					),
+				})
+			end
+		end
+	end
+	return items
 end
 
 local function resolve_note(kind, opts, callback)
@@ -124,7 +151,7 @@ local function resolve_note(kind, opts, callback)
 	end
 	if input_config.mode ~= "popup" then
 		local claim = claims.normalize_claim({
-			id = opts.id or ("draft-" .. tostring(vim.uv.hrtime())),
+			id = opts.id or ("draft-" .. claims.new_claim_id():sub(7)),
 			kind = kind,
 			start_line = line,
 			start_col = col,
@@ -136,6 +163,7 @@ local function resolve_note(kind, opts, callback)
 		if inline_editor.open({
 			bufnr = opts.bufnr or vim.api.nvim_get_current_buf(),
 			claim = claim,
+			claim_references = claim_reference_items(opts.id),
 			default = opts.default,
 			discard_empty = opts.discard_empty == true,
 			draft = opts.draft == true,
@@ -153,6 +181,7 @@ local function resolve_note(kind, opts, callback)
 		default = opts.default,
 		height = input_config.height,
 		line = line,
+		claim_references = claim_reference_items(opts.id),
 		prompt = prompt,
 		title = claims.normalize_claim_kind(kind),
 		width = input_config.width,
@@ -401,7 +430,6 @@ function M.edit_nearest_claim_kind(opts)
 			ctx.notify("Unable to update claim", vim.log.levels.WARN)
 			return
 		end
-
 		state.save(config.get(), ctx.notify)
 		ctx.refresh_ui(target.bufnr)
 	end
@@ -460,6 +488,7 @@ function M.edit_nearest_claim_note(opts)
 	if input_config.mode ~= "popup" and inline_editor.open({
 		bufnr = target.bufnr,
 		claim = target.claim,
+		claim_references = claim_reference_items(target.claim.id),
 		default = target.claim.note,
 		on_submit = function(note)
 			apply_note(claims.normalize_note(note))
@@ -476,6 +505,7 @@ function M.edit_nearest_claim_note(opts)
 		default = target.claim.note,
 		height = input_config.height,
 		line = target.claim.start_line,
+		claim_references = claim_reference_items(target.claim.id),
 		prompt = prompt,
 		title = claims.normalize_claim_kind(target.claim.kind),
 		width = input_config.width,

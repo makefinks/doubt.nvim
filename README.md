@@ -113,10 +113,11 @@ Workspace session management:
 Without an explicit range, `:DoubtQuestion`, `:DoubtConcern`, `:DoubtReject`, and `:DoubtClaim <kind>` operate on the current line. With a visual or Ex range, they use that range instead.
 If you omit `[note]`, a borderless editor opens directly inside the rendered claim block. Use normal insert-mode editing, `<CR>` for new lines, `<S-CR>` or `ZZ` to save, and `ZQ`, `q`, or normal-mode `<Esc>` to cancel. Set `input.mode = "popup"` to retain the bordered popup editor.
 Type `@` in either note editor to reference a project file. In Git repositories, the picker lists tracked and non-ignored untracked files from the repository root; elsewhere, it scans the current working directory. The picker uses `vim.ui.select`, so any configured UI selector can provide the interface without being a doubt.nvim dependency.
+Type `#` to reference another claim in the active session. Each selection inserts a `` `#<claim-id>` `` token directly into the note, so you can add multiple claim references without copying their explanation text.
 
 `:DoubtExport` copies the active session to the configured register using the default export template, or a named template override when you pass one. It exports only trusted claims (`fresh`/`reanchored`) and reports skipped stale claims.
 
-In a Git repository, `:DoubtExport` also creates a review-run checkpoint. The checkpoint represents the exact working tree at handoff time, including existing uncommitted and untracked non-ignored files, without changing the real index or current branch. The payload gives every claim a stable ID and tells the agent where to write its claim-to-change manifest.
+In a Git repository, `:DoubtExport` also creates a review-run checkpoint. The checkpoint represents the exact working tree at handoff time, including existing uncommitted and untracked non-ignored files, without changing the real index or current branch, and tells the agent where to write its claim-to-change manifest.
 
 `:DoubtExportFilter` opens a separate command-only picker, lets you choose which claim kinds to include, and then copies raw XML for just those selected kinds.
 

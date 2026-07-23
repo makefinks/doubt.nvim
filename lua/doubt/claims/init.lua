@@ -22,7 +22,10 @@ M.current_visual_range = ranges.current_visual_range
 M.current_visual_span = ranges.current_visual_span
 
 M.normalize_note = normalize.normalize_note
+M.new_claim_id = normalize.new_claim_id
 M.normalize_claim = normalize.normalize_claim
+M.normalize_session_claim_ids = normalize.normalize_session_claim_ids
+M.next_session_claim_id = normalize.next_session_claim_id
 M.review_revision = normalize.review_revision
 M.sort_claims = normalize.sort_claims
 

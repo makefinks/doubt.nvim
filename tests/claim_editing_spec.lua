@@ -149,7 +149,8 @@ t.assert_eq(edited_claim.note, "inline rewrite\nwith context", "cancelling inlin
 	})
 	vim.api.nvim_win_set_cursor(0, { 1, 3 })
 	doubt.edit_nearest_claim_note()
-	edited_claim = state.find_claim(path, "tight")
+	edited_claim = claims.find_nearest_claim(state.current_files()[path].claims, 0, 3)
+	local migrated_tight_id = edited_claim.id
 	t.assert_eq(edited_claim.note, "popup rewrite", "popup mode should retain the previous note editor")
 	t.assert_eq(captured_note_opts.default, "inline rewrite\nwith context", "popup fallback should preload the existing note")
 	t.assert_eq(captured_note_opts.line, 0, "popup fallback should anchor to the claim start line")
@@ -165,17 +166,17 @@ vim.fn.confirm = function(message)
 end
 vim.cmd("DoubtClaimDelete")
 t.assert_eq(confirm_message, "Delete doubt claim?", "claim delete should ask for confirmation")
-t.assert_eq(state.find_claim(path, "tight") ~= nil, true, "claim delete should keep the claim when cancelled")
+t.assert_eq(state.find_claim(path, migrated_tight_id) ~= nil, true, "claim delete should keep the claim when cancelled")
 
 vim.fn.confirm = function()
 	return 1
 end
 vim.cmd("DoubtClaimDelete")
-t.assert_eq(state.find_claim(path, "tight"), nil, "claim delete should remove the nearest claim")
-t.assert_eq(state.find_claim(path, "wide") ~= nil, true, "claim delete should keep other claims intact")
+t.assert_eq(state.find_claim(path, migrated_tight_id), nil, "claim delete should remove the nearest claim")
+t.assert_eq(#state.current_files()[path].claims > 0, true, "claim delete should keep other claims intact")
 
 doubt.undo_deleted_claim()
-t.assert_eq(state.find_claim(path, "tight") ~= nil, true, "undo delete should restore the most recently deleted claim")
+t.assert_eq(state.find_claim(path, migrated_tight_id) ~= nil, true, "undo delete should restore the most recently deleted claim")
 vim.fn.confirm = original_confirm
 	end)
 end)

@@ -213,6 +213,26 @@ function M.pick_file_reference(opts, callback)
 	}, callback)
 end
 
+function M.pick_claim_reference(opts, callback)
+	opts = opts or {}
+	local items = vim.deepcopy(opts.claims or {})
+	if vim.tbl_isempty(items) then
+		vim.notify("No claims found to reference", vim.log.levels.INFO, { title = "doubt.nvim" })
+		callback(nil)
+		return
+	end
+
+	vim.ui.select(items, {
+		kind = "doubt_claim",
+		prompt = opts.claim_prompt or "Reference claim",
+		format_item = function(item)
+			return item.label or item.id or ""
+		end,
+	}, function(item)
+		callback(item and item.id or nil)
+	end)
+end
+
 function M.ask_note(opts, callback)
 	opts = opts or {}
 	local anchor_line = math.max(tonumber(opts.line) or 0, 0)
@@ -322,6 +342,18 @@ function M.ask_note(opts, callback)
 		end)
 	end
 
+	local function pick_claim_reference()
+		local insert_position = vim.api.nvim_win_get_cursor(winid)
+		picker_open = true
+		M.pick_claim_reference(opts, function(claim_id)
+			picker_open = false
+			if claim_id then
+				insert_text_at_cursor("`#" .. claim_id .. "` ", insert_position)
+			end
+			vim.schedule(resume_note_insert)
+		end)
+	end
+
 	local function map(mode, lhs, rhs)
 		vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, nowait = true, silent = true })
 	end
@@ -330,6 +362,9 @@ function M.ask_note(opts, callback)
 	map("n", "<CR>", submit)
 	if opts.file_references ~= false then
 		map("i", "@", pick_file_reference)
+	end
+	if opts.claim_references ~= false then
+		map("i", "#", pick_claim_reference)
 	end
 	map("i", "<Esc>", cancel)
 	map("n", "<Esc>", cancel)
