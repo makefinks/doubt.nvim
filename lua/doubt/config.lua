@@ -201,6 +201,7 @@ function M.set_highlights()
 	vim.api.nvim_set_hl(0, "DoubtFile", { fg = "#F8E7A1", bold = true })
 	vim.api.nvim_set_hl(0, "DoubtInlinePrefix", { fg = "#7F8794" })
 	vim.api.nvim_set_hl(0, "DoubtInlineBar", { bg = "#000000", fg = "#000000" })
+	vim.api.nvim_set_hl(0, "DoubtInlineAddressed", { fg = "#78A98A", bg = "#13251B" })
 	for kind, meta in pairs(config.claim_kinds or {}) do
 		meta.styles = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS.claim_kinds.question.styles or {}), meta.styles or {})
 		local claim_group = meta.hl or ("Doubt" .. meta.command)

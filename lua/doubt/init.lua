@@ -592,7 +592,9 @@ local function build_export_payload(opts)
 	}
 
 	if opts.trusted_only then
-		export_files, export_stats = export.select_trusted_files(files)
+		local inspection = ctx.refresh_review_run_inspection()
+		local review_statuses = inspection and inspection.statuses or {}
+		export_files, export_stats = export.select_trusted_files(files, review_statuses)
 	else
 		export_stats.exportable_claim_count = 0
 		for _, file_state in pairs(export_files) do
@@ -654,6 +656,19 @@ local function pluralize_claim(count)
 	return "claims"
 end
 
+local function skipped_claims_summary(stats)
+	local parts = {}
+	local stale = (stats or {}).skipped_stale_claims or 0
+	local reviewed = (stats or {}).skipped_reviewed_claims or 0
+	if stale > 0 then
+		table.insert(parts, string.format("%d stale %s", stale, pluralize_claim(stale)))
+	end
+	if reviewed > 0 then
+		table.insert(parts, string.format("%d previously reviewed %s", reviewed, pluralize_claim(reviewed)))
+	end
+	return table.concat(parts, ", ")
+end
+
 local function count_claim_kinds(files)
 	local counts = {}
 	for _, file_state in pairs(files or {}) do
@@ -675,26 +690,26 @@ function M.copy_export(opts)
 		return
 	end
 
-	local skipped = (payload.export_stats or {}).skipped_stale_claims or 0
+	local skipped = skipped_claims_summary(payload.export_stats)
 	if payload.exportable_claim_count == 0 then
-		ctx.notify(
-			string.format("No exportable claims remain; skipped %d stale %s", skipped, pluralize_claim(skipped)),
-			vim.log.levels.WARN
-		)
+		local message = "No exportable claims remain"
+		if skipped ~= "" then
+			message = message .. "; skipped " .. skipped
+		end
+		ctx.notify(message, vim.log.levels.WARN)
 		return
 	end
 
 	local export_config = config.get().export or {}
 	local register = export_config.register or "+"
 	vim.fn.setreg(register, payload.text)
-	if skipped > 0 then
+	if skipped ~= "" then
 		ctx.notify(
 			string.format(
-				"Copied doubt export to %s (%s, skipped %d stale %s)",
+				"Copied doubt export to %s (%s, skipped %s)",
 				register,
 				payload.template_name,
-				skipped,
-				pluralize_claim(skipped)
+				skipped
 			)
 		)
 	else

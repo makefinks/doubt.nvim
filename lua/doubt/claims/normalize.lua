@@ -44,6 +44,14 @@ function M.normalize_claim(claim)
 	}
 end
 
+function M.review_revision(claim)
+	local normalized = M.normalize_claim(claim)
+	if not normalized then
+		return nil
+	end
+	return vim.fn.sha256(vim.json.encode({ normalized.kind, normalized.note }))
+end
+
 function M.sort_claims(claim_list)
 	table.sort(claim_list, function(a, b)
 		if a.start_line == b.start_line then

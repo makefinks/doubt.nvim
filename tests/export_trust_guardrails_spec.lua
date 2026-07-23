@@ -70,6 +70,41 @@ t.assert_eq(trusted_files["lua/doubt/export.lua"].claims[2].freshness, "reanchor
 trusted_files["lua/doubt/export.lua"].claims[1].note = "changed"
 t.assert_eq(files["lua/doubt/export.lua"].claims[1].note, "fresh note", "trusted export should deep-copy returned claims")
 
+local reviewed_files, reviewed_stats = export.select_trusted_files(files, {
+	fresh = {
+		addressed = true,
+		outcome = "answered",
+		claim_revision = claims.review_revision(files["lua/doubt/export.lua"].claims[1]),
+	},
+	reanchored = {
+		addressed = false,
+		outcome = "needs_input",
+		claim_revision = claims.review_revision(files["lua/doubt/export.lua"].claims[2]),
+	},
+})
+t.assert_eq(vim.tbl_isempty(reviewed_files), true, "trusted export should omit unchanged claims with any agent response")
+t.assert_eq(reviewed_stats.skipped_reviewed_claims, 2, "trusted export should count resolved and needs-input claims as reviewed")
+
+files["lua/doubt/export.lua"].claims[2].note = "moved but trusted; target Neovim 0.10"
+local revised_files, revised_stats = export.select_trusted_files(files, {
+	reanchored = {
+		addressed = false,
+		outcome = "needs_input",
+		claim_revision = claims.review_revision({
+			id = "reanchored",
+			kind = "reject",
+			note = "moved but trusted",
+		}),
+	},
+})
+t.assert_eq(#revised_files["lua/doubt/export.lua"].claims, 2, "editing a reviewed claim should make its new revision exportable")
+t.assert_eq(revised_stats.skipped_reviewed_claims, 0, "revised claims should not count as previously reviewed")
+
+local unversioned_files = export.select_trusted_files(files, {
+	fresh = { addressed = true, outcome = "answered" },
+})
+t.assert_eq(#unversioned_files["lua/doubt/export.lua"].claims, 2, "statuses without revision metadata should not suppress export")
+
 local raw_xml = export.build_session_xml("trust-review", files)
 t.assert_match(raw_xml, 'note="stale note"', "raw xml should still include stale claims when callers pass the full file map")
 
@@ -169,6 +204,30 @@ t.assert_eq(copied:match('another stale note'), nil, "default copy export should
 t.assert_eq(vim.fn.getreg("c"), copied, "default copy export should write the trusted handoff to the configured register")
 	t.assert_eq(notifications[#notifications].message, "Copied doubt export to c (review, skipped 1 stale claim)", "default copy export should report stale claims found during pre-export refresh")
 t.assert_eq(notifications[#notifications].level, vim.log.levels.INFO, "mixed trusted exports should notify at info level")
+
+local review_runs = require("doubt.review_runs")
+local original_inspect = review_runs.inspect
+review_runs.inspect = function()
+	return {
+		statuses = {
+			["1"] = {
+				addressed = false,
+				outcome = "needs_input",
+				claim_revision = claims.review_revision(mixed.claims[1]),
+			},
+		},
+	}
+end
+vim.fn.setreg("c", "keep reviewed")
+local reviewed_copy = doubt.copy_export()
+t.assert_eq(reviewed_copy, nil, "trusted export should not resend an unchanged needs-input claim")
+t.assert_eq(vim.fn.getreg("c"), "keep reviewed", "reviewed-only exports should not overwrite the register")
+t.assert_eq(
+	notifications[#notifications].message,
+	"No exportable claims remain; skipped 1 stale claim, 1 previously reviewed claim",
+	"reviewed-only exports should explain why claims were omitted"
+)
+review_runs.inspect = original_inspect
 
 vim.fn.setreg("c", "keep me")
 state.get().sessions["trust-review"].files = {

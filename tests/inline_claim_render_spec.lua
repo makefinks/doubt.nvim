@@ -47,7 +47,7 @@ table.insert(file_state.claims, {
 	start_col = 0,
 	end_line = 0,
 	end_col = 5,
-	note = "alpha beta gamma delta",
+		note = "alpha beta gamma delta epsilon zeta",
 })
 
 table.insert(file_state.claims, {
@@ -132,7 +132,8 @@ local reject_mark = mark_by_sign_text(marks, "!")
 
 t.assert_eq(question_mark ~= nil, true, "render should create a virtual-line extmark for the question claim")
 t.assert_eq(reject_mark ~= nil, true, "render should create a virtual-line extmark for the reject claim")
-t.assert_match(virt_line_text(question_mark.virt_lines[2]), "%.%.%. 19 more", "compact inline notes should show the hidden character count")
+t.assert_match(virt_line_text(question_mark.virt_lines[2]), "alpha beta", "compact inline notes should show the first preview row")
+t.assert_match(virt_line_text(question_mark.virt_lines[3]), "%.%.%. %d+ more", "compact inline notes should truncate on the second preview row")
 t.assert_eq(question_mark.virt_lines_above, true, "compact claim notes should render above the claim")
 t.assert_eq(reject_mark.virt_lines_above, true, "other compact claims should keep the default above-claim layout")
 t.assert_eq(question_mark.virt_lines[1][2][2], "DoubtInlineBar", "compact question claims should frame the note with the shared bar row")
@@ -158,8 +159,9 @@ t.assert_eq(question_mark.virt_lines[2][3][2], "DoubtInlineQuestionText", "expan
 	t.assert_eq(question_mark.virt_lines[3][3][2], "DoubtInlineQuestionText", "wrapped rows should keep the same dark body text treatment")
 	t.assert_eq(virt_line_width(question_mark.virt_lines[1]), virt_line_width(question_mark.virt_lines[2]), "expanded frame should match the first content row width")
 	t.assert_eq(virt_line_width(question_mark.virt_lines[1]), virt_line_width(question_mark.virt_lines[3]), "expanded frame should match wrapped content row widths")
-	t.assert_eq(virt_line_width(question_mark.virt_lines[1]), virt_line_width(question_mark.virt_lines[4]), "expanded frame should match the closing bar width")
-	t.assert_eq(question_mark.virt_lines[4][2][2], "DoubtInlineBar", "expanded claims should close with the shared bar treatment")
+	t.assert_eq(virt_line_width(question_mark.virt_lines[1]), virt_line_width(question_mark.virt_lines[4]), "expanded frame should match every wrapped content row")
+	t.assert_eq(virt_line_width(question_mark.virt_lines[1]), virt_line_width(question_mark.virt_lines[5]), "expanded frame should match the closing bar width")
+	t.assert_eq(question_mark.virt_lines[5][2][2], "DoubtInlineBar", "expanded claims should close with the shared bar treatment")
 	t.assert_eq(reject_mark.virt_lines_above, true, "non-expanded claims should stay compact")
 
 doubt.toggle_nearest_claim()
@@ -168,7 +170,8 @@ marks = current_marks()
 question_mark = mark_by_sign_text(marks, "?")
 
 t.assert_eq(question_mark.virt_lines_above, true, "toggling the same claim again should collapse it")
-t.assert_match(virt_line_text(question_mark.virt_lines[2]), "%.%.%. 19 more", "collapsed claim should return to the compact truncation text")
+t.assert_match(virt_line_text(question_mark.virt_lines[2]), "alpha beta", "collapsed claim should restore the first preview row")
+t.assert_match(virt_line_text(question_mark.virt_lines[3]), "%.%.%. %d+ more", "collapsed claim should truncate on the second preview row")
 
 doubt.toggle_inline_notes()
 
@@ -180,7 +183,7 @@ t.assert_eq(question_mark ~= nil, true, "inline notes should keep the question s
 t.assert_eq(reject_mark ~= nil, true, "inline notes should keep the reject sign")
 t.assert_eq(question_mark.virt_lines, nil, "inline notes should remove question virtual lines")
 t.assert_eq(reject_mark.virt_lines, nil, "inline notes should remove reject virtual lines")
-t.assert_match(virt_line_text(question_mark.virt_text), "%.%.%. 19 more", "inline notes should keep compact question text")
+t.assert_match(virt_line_text(question_mark.virt_text), "%.%.%. 32 more", "inline notes should keep a single compact question row")
 t.assert_match(virt_line_text(reject_mark.virt_text), "%.%.%. 21 more", "inline notes should keep compact reject text")
 
 vim.api.nvim_win_set_cursor(0, { 1, 1 })
@@ -197,7 +200,7 @@ reject_mark = any_mark_by_sign_text(marks, "!")
 t.assert_eq(question_mark ~= nil, true, "expanded inline notes should keep the question sign")
 t.assert_eq(reject_mark ~= nil, true, "expanded inline notes should keep other visible signs")
 t.assert_eq(question_mark.virt_lines, nil, "expanded inline notes should stay in end-of-line layout")
-t.assert_match(virt_line_text(question_mark.virt_text), "alpha beta gamma delta", "expanded inline note should show the full text")
+t.assert_match(virt_line_text(question_mark.virt_text), "alpha beta gamma delta epsilon zeta", "expanded inline note should show the full text")
 
 if not ok then
 	t.fail(err)

@@ -23,6 +23,7 @@ M.current_visual_span = ranges.current_visual_span
 
 M.normalize_note = normalize.normalize_note
 M.normalize_claim = normalize.normalize_claim
+M.review_revision = normalize.review_revision
 M.sort_claims = normalize.sort_claims
 
 M.build_buffer_anchor = anchors.build_buffer_anchor

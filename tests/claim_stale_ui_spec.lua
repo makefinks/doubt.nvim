@@ -140,8 +140,12 @@ for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, render_ctx.ns, 0, -1,
 end
 t.assert_eq(addressed_stale_range, nil, "addressed claims should not retain stale range styling")
 t.assert_eq(addressed_sign.sign_hl_group, claims.meta("question").hl, "addressed claims should use their normal kind styling")
+local addressed_top_text = virt_line_text(addressed_sign.virt_lines[1])
 local addressed_inline_text = virt_line_text(addressed_sign.virt_lines[2])
-t.assert_match(addressed_inline_text, "%[addressed: changed%]", "source annotations should expose the agent decision")
+t.assert_match(addressed_top_text, "changed $", "source annotations should place the lowercase agent decision at the top right")
+t.assert_eq(addressed_inline_text:match("changed"), nil, "the top badge should not displace claim text")
+t.assert_match(addressed_inline_text, "stale note", "the review badge should leave the note unchanged")
+t.assert_eq(addressed_sign.virt_lines[1][#addressed_sign.virt_lines[1]][2], "DoubtInlineAddressed", "addressed outcomes should use a distinct badge style")
 t.assert_eq(addressed_inline_text:match("%[stale%]"), nil, "addressed source annotations should suppress stale markers")
 
 local lines = panel.build_lines({

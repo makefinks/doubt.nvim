@@ -101,11 +101,13 @@ local function append_instruction_block(lines, files, export_config)
 	table.insert(lines, "  </instructions>")
 end
 
-function M.select_trusted_files(files)
+function M.select_trusted_files(files, review_statuses)
 	files = type(files) == "table" and files or {}
+	review_statuses = type(review_statuses) == "table" and review_statuses or {}
 
 	local filtered = {}
 	local exportable_claim_count = 0
+	local skipped_reviewed_claims = 0
 	local skipped_stale_claims = 0
 
 	for path, file_state in pairs(files) do
@@ -113,8 +115,16 @@ function M.select_trusted_files(files)
 		for _, claim in ipairs((file_state or {}).claims or {}) do
 			local normalized = claims.normalize_claim(claim)
 			if normalized and (normalized.freshness == "fresh" or normalized.freshness == "reanchored") then
-				table.insert(trusted_claims, normalized)
-				exportable_claim_count = exportable_claim_count + 1
+				local status = review_statuses[normalized.id]
+				local reviewed_revision = status and status.claim_revision or nil
+				local unchanged_reviewed_claim = reviewed_revision ~= nil
+					and reviewed_revision == claims.review_revision(normalized)
+				if unchanged_reviewed_claim then
+					skipped_reviewed_claims = skipped_reviewed_claims + 1
+				else
+					table.insert(trusted_claims, normalized)
+					exportable_claim_count = exportable_claim_count + 1
+				end
 			else
 				skipped_stale_claims = skipped_stale_claims + 1
 			end
@@ -128,6 +138,7 @@ function M.select_trusted_files(files)
 	return filtered, {
 		exportable_claim_count = exportable_claim_count,
 		exportable_file_count = vim.tbl_count(filtered),
+		skipped_reviewed_claims = skipped_reviewed_claims,
 		skipped_stale_claims = skipped_stale_claims,
 	}
 end

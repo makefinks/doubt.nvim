@@ -95,6 +95,27 @@ local function wrap_inline_text(text, max_width)
 	return lines
 end
 
+local function compact_inline_lines(text, max_width, max_lines)
+	local wrapped = wrap_inline_text(text, max_width)
+	if #wrapped <= max_lines then
+		return wrapped
+	end
+
+	local total_chars = vim.fn.strchars(text)
+	for keep = total_chars - 1, 0, -1 do
+		local prefix = vim.fn.strcharpart(text, 0, keep):gsub("%s+$", "")
+		local hidden_chars = total_chars - vim.fn.strchars(prefix)
+		local marker = string.format("... %d more", hidden_chars):gsub(" ", MARKDOWN_SPACE_SENTINEL)
+		local candidate = prefix == "" and marker or (prefix .. " " .. marker)
+		local lines = wrap_inline_text(candidate, max_width)
+		if #lines <= max_lines then
+			return lines
+		end
+	end
+
+	return { compact_inline_text(text, max_width) }
+end
+
 local function pad(width)
 	return string.rep(" ", math.max(width, 1))
 end
@@ -205,6 +226,13 @@ local function chunks_width(chunks)
 	return width
 end
 
+local function append_chunks(target, source)
+	for _, chunk in ipairs(source or {}) do
+		table.insert(target, chunk)
+	end
+	return target
+end
+
 local function clamp_row(bufnr, line)
 	local last_row = math.max(vim.api.nvim_buf_line_count(bufnr) - 1, 0)
 	line = math.max(line or 0, 0)
@@ -256,13 +284,13 @@ function M.render_claim(ctx, bufnr, claim)
 		inline_text_hl = meta.dim_inline_text_hl or inline_text_hl
 	end
 	local inline_label, inline_text = claims.inline_text(claim, { hide_freshness = addressed })
-	if addressed then
-		inline_text = string.format("[addressed: %s] %s", review_status.outcome, inline_text)
-	end
+	local review_badge = addressed
+		and string.format(" %s ", (review_status.outcome or "addressed"):gsub("_", " "))
+		or nil
 	local expanded = ctx.is_claim_expanded and ctx.is_claim_expanded(ctx.current_path(bufnr), claim)
 	local body_lines = expanded
 		and wrap_inline_text(inline_text, config.inline_notes.max_width)
-		or { compact_inline_text(inline_text, config.inline_notes.max_width) }
+		or compact_inline_lines(inline_text, config.inline_notes.max_width, 2)
 	local body_chunks = {}
 	for idx, body_line in ipairs(body_lines) do
 		body_chunks[idx] = prefixed_markdown_chunks(" ", body_line, inline_text_hl)
@@ -276,35 +304,51 @@ function M.render_claim(ctx, bufnr, claim)
 		and (expanded and inline_text or compact_inline_text(inline_text, config.inline_notes.max_width))
 		or nil
 	local label_width = display_width(inline_label)
+	local heading_chunks = { { inline_label, inline_label_hl } }
 	local content_width = 0
 	for idx in ipairs(body_lines) do
 		content_width = math.max(content_width, label_width + chunks_width(body_chunks[idx]))
 	end
-	content_width = content_width + right_padding
+	content_width = math.max(content_width + right_padding, display_width(review_badge))
+	local first_content_chunks = append_chunks({}, heading_chunks)
+	append_chunks(first_content_chunks, body_chunks[1])
+	local inline_chunks = nil
+	if inline_note then
+		inline_chunks = append_chunks({ { " ", "Normal" } }, heading_chunks)
+		if review_badge then
+			append_chunks(inline_chunks, {
+				{ " ", "DoubtInlineBar" },
+				{ review_badge, "DoubtInlineAddressed" },
+			})
+		end
+		append_chunks(inline_chunks, prefixed_markdown_chunks(" ", inline_note, inline_text_hl))
+	end
+	local top_row = {
+		{
+			prefix,
+			"DoubtInlinePrefix",
+		},
+	}
+	if review_badge then
+		local badge_padding = content_width - display_width(review_badge)
+		if badge_padding > 0 then
+			table.insert(top_row, { pad(badge_padding), "DoubtInlineBar" })
+		end
+		table.insert(top_row, { review_badge, "DoubtInlineAddressed" })
+	else
+		table.insert(top_row, { pad(content_width), "DoubtInlineBar" })
+	end
 
 	-- Render inline notes as a rectangular virtual block so wrapped rows align
 	-- with the label and background bar instead of drifting by content width.
 	local virt_lines = render_block_notes and {
+		top_row,
 		{
 			{
 				prefix,
 				"DoubtInlinePrefix",
 			},
-			{
-				pad(content_width),
-				"DoubtInlineBar",
-			},
-		},
-		{
-			{
-				prefix,
-				"DoubtInlinePrefix",
-			},
-		{
-			inline_label,
-			inline_label_hl,
-		},
-		unpack(body_chunks[1]),
+		unpack(first_content_chunks),
 	},
 	} or nil
 
@@ -319,7 +363,7 @@ function M.render_claim(ctx, bufnr, claim)
 		end
 	end
 
-	if expanded and virt_lines then
+	if virt_lines then
 		for idx = 2, #body_lines do
 			local row_width = label_width + chunks_width(body_chunks[idx])
 			local row_padding = content_width - row_width
@@ -371,11 +415,7 @@ function M.render_claim(ctx, bufnr, claim)
 		sign_text = meta.sign or config.signs[claim.kind] or config.signs.file,
 		sign_hl_group = claim_hl,
 		priority = 130,
-		virt_text = inline_note and {
-			{ " ", "Normal" },
-			{ inline_label, inline_label_hl },
-			unpack(prefixed_markdown_chunks(" ", inline_note, inline_text_hl)),
-		} or nil,
+		virt_text = inline_chunks,
 		virt_text_pos = inline_note and "eol" or nil,
 		virt_lines = virt_lines,
 		virt_lines_above = render_block_notes,

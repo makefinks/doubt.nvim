@@ -1,3 +1,5 @@
+local claims = require("doubt.claims")
+
 local M = {}
 
 local SCHEMA_VERSION = 1
@@ -244,6 +246,7 @@ local function normalize_exported_claims(root, files)
 			table.insert(exported, {
 				id = claim.id,
 				file = relative,
+				revision = claims.review_revision(claim),
 				start_line = (claim.start_line or 0) + 1,
 				end_line = (claim.end_line or claim.start_line or 0) + 1,
 			})
@@ -760,6 +763,10 @@ local function inspect_run(run, opts)
 
 	local attributed = {}
 	local statuses = {}
+	local exported_claims = {}
+	for _, claim in ipairs(run.claims or {}) do
+		exported_claims[claim.id] = claim
+	end
 	for claim_id, result in pairs(manifest.claims) do
 		local matches = {}
 		for _, change in ipairs(result.changes) do
@@ -797,6 +804,7 @@ local function inspect_run(run, opts)
 			reported_change_count = #result.changes,
 			verified_hunk_count = verified_hunk_count,
 			matches = ordered_matches,
+			claim_revision = (exported_claims[claim_id] or {}).revision,
 			run = run,
 		}
 	end
