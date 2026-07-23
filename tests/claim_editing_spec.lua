@@ -93,7 +93,9 @@ t.assert_eq(editor.active, true, "claim note editing should open the inline edit
 t.assert_eq(editor.draft, false, "editing an existing claim should not create a draft")
 t.assert_eq(editor.claim.id, "tight", "inline editor should target the nearest claim")
 t.assert_eq(vim.api.nvim_buf_get_lines(editor.bufnr, 0, -1, false), { "rewritten note" }, "inline editor should preload the existing note")
-t.assert_eq(vim.api.nvim_win_get_config(editor.winid).border, "none", "inline editor should use a seamless borderless window")
+local editor_border = vim.api.nvim_win_get_config(editor.winid).border
+local borderless = editor_border == "none" or (type(editor_border) == "table" and vim.tbl_isempty(editor_border))
+t.assert_eq(borderless, true, "inline editor should use a seamless borderless window")
 
 vim.api.nvim_buf_set_lines(editor.bufnr, 0, -1, false, { "inline rewrite", "with context" })
 vim.api.nvim_exec_autocmds("TextChanged", { buffer = editor.bufnr })

@@ -4,6 +4,7 @@ local plenary_dir = vim.env.PLENARY_DIR or vim.fs.joinpath(root, ".deps", "plena
 
 vim.opt.runtimepath:prepend(root)
 vim.opt.runtimepath:prepend(plenary_dir)
+vim.opt.shadafile = "NONE"
 
 vim.notify = function() end
 
