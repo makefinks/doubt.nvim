@@ -14,6 +14,9 @@ M.meta = kinds.meta
 M.default_note = kinds.default_note
 M.normalize_claim_kind = kinds.normalize_claim_kind
 
+
+
+
 M.normalize_line_range = ranges.normalize_line_range
 M.normalize_position_range = ranges.normalize_position_range
 M.current_range_from_command = ranges.current_range_from_command

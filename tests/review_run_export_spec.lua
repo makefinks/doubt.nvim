@@ -5,6 +5,7 @@ describe("review run export", function()
 		local doubt = require("doubt")
 		local claims = require("doubt.claims")
 		local state = require("doubt.state")
+		local review_runs = require("doubt.review_runs")
 		local original_cwd = vim.fn.getcwd()
 		local root = vim.fn.tempname()
 		vim.fn.mkdir(vim.fs.joinpath(root, "lua"), "p")
@@ -36,7 +37,27 @@ describe("review run export", function()
 			anchor = claims.build_content_anchor(content, 0, 0, 0, #content),
 		})
 
+		local original_inspect = review_runs.inspect
+		local inspection_count = 0
+		review_runs.inspect = function(opts)
+			inspection_count = inspection_count + 1
+			return original_inspect(opts)
+		end
+
 		local exported = doubt.copy_export()
+		local inspections_after_export = inspection_count
+		local original_claim_diff = review_runs.claim_diff
+		review_runs.claim_diff = function()
+			return nil, "No completed result"
+		end
+		doubt.open_claim_diff({ id = "claim-risk", path = path })
+		review_runs.claim_diff = original_claim_diff
+		review_runs.inspect = original_inspect
+		t.assert_eq(
+			inspection_count,
+			inspections_after_export + 1,
+			"creating a review run should invalidate the prior inspection cache"
+		)
 		t.assert_match(exported, '<doubt session="handoff" run_id="run%-[^\"]+" manifest_path="%.doubt/runs/[^\"]+/results%.json">', "handoff XML should identify its review run")
 		t.assert_match(exported, 'id="claim%-risk"', "handoff claims should expose stable IDs")
 		t.assert_match(exported, "## Doubt review run", "handoff should clearly separate the review-run protocol")

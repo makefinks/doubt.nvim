@@ -300,9 +300,19 @@ function M.create(opts)
 		return nil, "Exported claims must be inside the Git workspace"
 	end
 	local run_id = new_run_id()
-	local baseline_tree, tree_error = capture_tree(root)
+	local baseline_tree = opts.baseline_tree
+	if baseline_tree then
+		local _, baseline_error = git(root, { "cat-file", "-e", baseline_tree .. "^{tree}" })
+		if baseline_error then
+			baseline_tree = nil
+		end
+	end
 	if not baseline_tree then
-		return nil, "Unable to capture review baseline: " .. (tree_error or "unknown error")
+		local tree, tree_error = capture_tree(root)
+		if not tree then
+			return nil, "Unable to capture review baseline: " .. (tree_error or "unknown error")
+		end
+		baseline_tree = tree
 	end
 	local baseline_ref = "refs/doubt/runs/" .. run_id
 	local _, ref_error = git(root, { "update-ref", baseline_ref, baseline_tree })
@@ -734,7 +744,7 @@ function M.diff(opts)
 	return diff
 end
 
-local function review_diff(run)
+local function review_diff(run, tree_cache)
 	if run.completion_helper_path then
 		local completion = load_completion(run)
 		if not completion then
@@ -750,6 +760,9 @@ local function review_diff(run)
 	local current_tree, tree_error = capture_tree(run.root)
 	if not current_tree then
 		return nil, tree_error
+	end
+	if tree_cache then
+		tree_cache.tree = current_tree
 	end
 	return tree_diff(run.root, run.baseline.object, current_tree)
 end
@@ -773,7 +786,8 @@ local function inspect_run(run, opts)
 			unattributed_count = 0,
 		}
 	end
-	local diff_files, diff_error = review_diff(run)
+	local tree_cache = {}
+	local diff_files, diff_error = review_diff(run, tree_cache)
 	if not diff_files then
 		if run.completion_helper_path then
 			return {
@@ -787,6 +801,23 @@ local function inspect_run(run, opts)
 	end
 
 	local attributed = {}
+	local file_indices = {}
+	local diff_by_path = {}
+	for file_index, file in ipairs(diff_files) do
+		file_indices[file] = file_index
+		for _, candidate in ipairs({ file.path, file.old_path, file.new_path }) do
+			if type(candidate) == "string" and candidate ~= "" then
+				local bucket = diff_by_path[candidate]
+				if not bucket then
+					bucket = {}
+					diff_by_path[candidate] = bucket
+				end
+				if bucket[#bucket] ~= file then
+					table.insert(bucket, file)
+				end
+			end
+		end
+	end
 	local statuses = {}
 	local exported_claims = {}
 	for _, claim in ipairs(run.claims or {}) do
@@ -795,19 +826,18 @@ local function inspect_run(run, opts)
 	for claim_id, result in pairs(manifest.claims) do
 		local matches = {}
 		for _, change in ipairs(result.changes) do
-			for file_index, file in ipairs(diff_files) do
-				if file.path == change.path or file.old_path == change.path or file.new_path == change.path then
-					if vim.tbl_isempty(file.hunks) then
-						local key = string.format("%d:0", file_index)
+			for _, file in ipairs(diff_by_path[change.path] or {}) do
+				local file_index = file_indices[file]
+				if vim.tbl_isempty(file.hunks) then
+					local key = string.format("%d:0", file_index)
+					attributed[key] = true
+					matches[key] = { file = file }
+				end
+				for hunk_index, hunk in ipairs(file.hunks) do
+					if hunk_matches_change(hunk, change) then
+						local key = string.format("%d:%d", file_index, hunk_index)
 						attributed[key] = true
-						matches[key] = { file = file }
-					end
-					for hunk_index, hunk in ipairs(file.hunks) do
-						if hunk_matches_change(hunk, change) then
-							local key = string.format("%d:%d", file_index, hunk_index)
-							attributed[key] = true
-							matches[key] = { file = file, hunk = hunk }
-						end
+						matches[key] = { file = file, hunk = hunk }
 					end
 				end
 			end
@@ -850,9 +880,13 @@ local function inspect_run(run, opts)
 	end
 	local post_response_change_count = 0
 	if opts.include_drift and run.completion then
-		local current_tree, tree_error = capture_tree(run.root)
+		local current_tree, tree_error = tree_cache.tree, nil
 		if not current_tree then
-			return nil, "Unable to calculate post-response changes: " .. (tree_error or "unknown error")
+			current_tree, tree_error = capture_tree(run.root)
+			if not current_tree then
+				return nil, "Unable to calculate post-response changes: " .. (tree_error or "unknown error")
+			end
+			tree_cache.tree = current_tree
 		end
 		local drift_files, drift_error = tree_diff(run.root, run.completion.result.object, current_tree)
 		if not drift_files then
@@ -865,6 +899,7 @@ local function inspect_run(run, opts)
 		statuses = statuses,
 		unattributed_count = unattributed_count,
 		post_response_change_count = post_response_change_count,
+		current_tree = tree_cache.tree,
 	}
 end
 
@@ -944,16 +979,63 @@ local function render_claim_patch(run, claim_id, status)
 	return lines
 end
 
-local function tree_file_lines(root, tree, path)
-	local result = vim.system({ "git", "-C", root, "show", tree .. ":" .. path }, { text = true }):wait()
+local function fetch_tree_blobs(root, tree, paths)
+	-- Fetch baseline file contents for a whole claim in a single process.
+	local unique = {}
+	local seen = {}
+	for _, path in ipairs(paths or {}) do
+		if type(path) == "string" and path ~= "" and not seen[path] then
+			seen[path] = true
+			table.insert(unique, path)
+		end
+	end
+	if vim.tbl_isempty(unique) then
+		return {}
+	end
+	local request = {}
+	for _, path in ipairs(unique) do
+		request[#request + 1] = tree .. ":" .. path
+	end
+	local result = vim.system(
+		{ "git", "-C", root, "cat-file", "--batch" },
+		{ stdin = table.concat(request, "\n") .. "\n", text = false }
+	):wait()
 	if result.code ~= 0 then
 		return nil, vim.trim(result.stderr or "")
 	end
-	if result.stdout == "" then
+	local contents = {}
+	local output = result.stdout or ""
+	local position = 1
+	for _, path in ipairs(unique) do
+		local header_end = output:find("\n", position)
+		if not header_end then
+			return nil, "Unable to read baseline file contents"
+		end
+		local header = output:sub(position, header_end - 1)
+		position = header_end + 1
+		if header:match(" missing$") then
+			contents[path] = nil
+		else
+			local size = tonumber(header:match(" (%d+)$"))
+			if not size then
+				return nil, "Unable to read baseline file contents"
+			end
+			contents[path] = output:sub(position, position + size - 1)
+			position = position + size + 1
+		end
+	end
+	return contents
+end
+
+local function blob_lines(blob)
+	if blob == nil then
+		return nil
+	end
+	if blob == "" then
 		return {}
 	end
-	local lines = vim.split(result.stdout, "\n", { plain = true, trimempty = false })
-	if result.stdout:sub(-1) == "\n" then
+	local lines = vim.split(blob, "\n", { plain = true })
+	if blob:sub(-1) == "\n" then
 		table.remove(lines)
 	end
 	return lines
@@ -1018,12 +1100,20 @@ local function build_claim_file_pairs(run, matches)
 	table.sort(pairs, function(left, right)
 		return left.path < right.path
 	end)
+	local source_paths = {}
 	for _, pair in ipairs(pairs) do
-		local before, err = tree_file_lines(run.root, run.baseline.object, pair.source_path)
+		table.insert(source_paths, pair.source_path)
+	end
+	local blobs, fetch_error = fetch_tree_blobs(run.root, run.baseline.object, source_paths)
+	if not blobs then
+		return nil, has_file_level_change, fetch_error
+	end
+	for _, pair in ipairs(pairs) do
+		local before = blob_lines(blobs[pair.source_path])
 		if not before and pair.created then
 			before = {}
 		elseif not before then
-			return nil, has_file_level_change, err
+			return nil, has_file_level_change, "Baseline file not found: " .. pair.source_path
 		end
 		pair.before = before
 		pair.after = apply_hunks(before, pair.hunks)
@@ -1034,11 +1124,24 @@ local function build_claim_file_pairs(run, matches)
 	return pairs, has_file_level_change
 end
 
+local function reusable_claim_inspection(inspection, claim_id)
+	if type(inspection) ~= "table" or type(inspection.statuses) ~= "table" then
+		return false
+	end
+	local status = inspection.statuses[claim_id]
+	local run = status and (status.run or inspection.run) or nil
+	return type(run) == "table" and type(run.completion) == "table"
+end
+
 function M.claim_diff(opts)
 	opts = opts or {}
-	local result, err = inspect(opts)
+	local result = reusable_claim_inspection(opts.inspection, opts.claim_id) and opts.inspection or nil
 	if not result then
-		return nil, err
+		local err
+		result, err = inspect(opts)
+		if not result then
+			return nil, err
+		end
 	end
 	local status = result.statuses[opts.claim_id]
 	if not status then

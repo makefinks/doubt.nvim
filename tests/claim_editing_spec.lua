@@ -6,6 +6,8 @@ describe("claim editing", function()
 local temp_state = vim.fs.joinpath(vim.fn.tempname(), "doubt-state.json")
 local temp_file = vim.fs.joinpath(vim.fn.tempname(), "sample.lua")
 
+
+
 vim.fn.mkdir(vim.fs.dirname(temp_state), "p")
 vim.fn.mkdir(vim.fs.dirname(temp_file), "p")
 vim.fn.writefile({ "alpha = 1", "beta = alpha + 1", "return beta" }, temp_file)

@@ -615,6 +615,7 @@ function M.open_claim_diff(opts)
 
 	local result, err = review_runs.claim_diff({
 		claim_id = opts.id,
+		inspection = ctx.review_run_inspection(),
 		session_name = state.active_session_name(),
 		session_source = state.active_session_source(),
 		workspace = vim.fn.getcwd(),
@@ -677,8 +678,9 @@ local function build_export_payload(opts)
 		skipped_stale_claims = 0,
 	}
 
+	local inspection = nil
 	if opts.trusted_only then
-		local inspection = ctx.refresh_review_run_inspection()
+		inspection = ctx.refresh_review_run_inspection()
 		local review_statuses = inspection and inspection.statuses or {}
 		export_files, export_stats = export.select_trusted_files(files, review_statuses)
 	else
@@ -693,12 +695,14 @@ local function build_export_payload(opts)
 	local review_run = nil
 	if opts.create_review_run and export_stats.exportable_claim_count > 0 then
 		review_run = review_runs.create({
+			baseline_tree = inspection and inspection.current_tree or nil,
 			files = export_files,
 			session_name = session_name,
 			session_source = state.active_session_source(),
 			workspace = vim.fn.getcwd(),
 		})
 		if review_run then
+			ctx.invalidate_review_run_inspection()
 			review_run.protocol_text = review_runs.protocol_text(review_run)
 			xml = export.build_session_xml(session_name, export_files, nil, review_run)
 		end

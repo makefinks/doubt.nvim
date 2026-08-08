@@ -461,4 +461,145 @@ describe("review runs", function()
 
 		vim.cmd.cd(original_cwd)
 	end)
+
+	it("exposes the captured worktree and reuses it as the export baseline", function()
+		local review_runs = require("doubt.review_runs")
+		local original_cwd = vim.fn.getcwd()
+		local root = vim.fn.tempname()
+		local path = vim.fs.joinpath(root, "reuse.lua")
+		vim.fn.mkdir(root, "p")
+		vim.fn.writefile({ "return 1" }, path)
+		vim.system({ "git", "init", "-q", root }, { text = true }):wait()
+		vim.cmd.cd(root)
+
+		local first_run = review_runs.create({
+			workspace = root,
+			session_name = "reuse-review",
+			session_source = "local",
+			files = {
+				[path] = { claims = { { id = "reuse-claim", start_line = 0, end_line = 0 } } },
+			},
+		})
+		vim.fn.writefile({ "return 2" }, path)
+		publish_results(review_runs, first_run, {
+			schema_version = 1,
+			run_id = first_run.run_id,
+			claims = {
+				{
+					claim_id = "reuse-claim",
+					outcome = "changed",
+					summary = "Updated the return value.",
+					changes = { { path = "reuse.lua" } },
+				},
+			},
+		})
+
+		local inspection = review_runs.inspect({
+			workspace = root,
+			session_name = "reuse-review",
+			session_source = "local",
+		})
+		t.assert_eq(type(inspection.current_tree), "string", "inspection should expose the captured worktree tree")
+		t.assert_match(inspection.current_tree, "^[0-9a-f]+$", "the exposed tree should be a valid Git object name")
+
+		local reused = review_runs.create({
+			baseline_tree = inspection.current_tree,
+			workspace = root,
+			session_name = "reuse-review",
+			session_source = "local",
+			files = {
+				[path] = { claims = { { id = "reuse-claim-2", start_line = 0, end_line = 0 } } },
+			},
+		})
+		t.assert_eq(reused.baseline.object, inspection.current_tree, "create should accept the precomputed baseline tree")
+
+		local invalid = review_runs.create({
+			baseline_tree = "not-a-tree",
+			workspace = root,
+			session_name = "reuse-review",
+			session_source = "local",
+			files = {
+				[path] = { claims = { { id = "reuse-claim-3", start_line = 0, end_line = 0 } } },
+			},
+		})
+		t.assert_eq(vim.uv.fs_stat(invalid.absolute_diff_helper_path) ~= nil, true, "invalid baselines should fall back to a fresh capture")
+		t.assert_match(invalid.baseline.object, "^[0-9a-f]+$", "fallback baselines should remain real trees")
+
+		vim.cmd.cd(original_cwd)
+	end)
+
+	it("reuses the caller's inspection for claim diffs", function()
+		local review_runs = require("doubt.review_runs")
+		local original_cwd = vim.fn.getcwd()
+		local root = vim.fn.tempname()
+		local path = vim.fs.joinpath(root, "claim_reuse.lua")
+		vim.fn.mkdir(root, "p")
+		vim.fn.writefile({ "return 1" }, path)
+		vim.system({ "git", "init", "-q", root }, { text = true }):wait()
+		vim.cmd.cd(root)
+
+		local run = review_runs.create({
+			workspace = root,
+			session_name = "reuse-diff-review",
+			session_source = "local",
+			files = {
+				[path] = { claims = { { id = "reuse-diff-claim", start_line = 0, end_line = 0 } } },
+			},
+		})
+		vim.fn.writefile({ "return 2" }, path)
+		publish_results(review_runs, run, {
+			schema_version = 1,
+			run_id = run.run_id,
+			claims = {
+				{
+					claim_id = "reuse-diff-claim",
+					outcome = "changed",
+					summary = "Updated the return value.",
+					changes = { { path = "claim_reuse.lua" } },
+				},
+			},
+		})
+
+		local inspection = review_runs.inspect({
+			workspace = root,
+			session_name = "reuse-diff-review",
+			session_source = "local",
+		})
+		t.assert_eq(type(inspection.statuses["reuse-diff-claim"]), "table", "inspection should expose the claim status")
+		local refreshed = review_runs.claim_diff({
+			claim_id = "reuse-diff-claim",
+			inspection = { statuses = {} },
+			session_name = "reuse-diff-review",
+			session_source = "local",
+			workspace = root,
+		})
+		t.assert_eq(refreshed.status.outcome, "changed", "incomplete cached inspections should be refreshed")
+
+		local unavailable, unavailable_error = review_runs.claim_diff({
+			claim_id = "no-such-claim",
+			inspection = inspection,
+			session_name = "reuse-diff-review",
+			session_source = "local",
+			workspace = root,
+		})
+		t.assert_eq(unavailable, nil, "unknown claims should fail after refreshing the inspection")
+		t.assert_eq(unavailable_error, "The agent manifest has no result for this claim", "unknown-claim errors should stay explicit")
+
+		vim.uv.fs_unlink(run.absolute_manifest_path)
+		vim.uv.fs_unlink(run.absolute_completion_path)
+
+		local result = review_runs.claim_diff({
+			claim_id = "reuse-diff-claim",
+			inspection = inspection,
+			session_name = "reuse-diff-review",
+			session_source = "local",
+			workspace = root,
+		})
+		t.assert_eq(result.status.outcome, "changed", "status should retain the outcome from the reused inspection")
+		t.assert_eq(result.run.run_id, run.run_id, "reused inspection should retain run provenance")
+		t.assert_eq(result.files[1].path, "claim_reuse.lua", "reused inspections should build baseline file pairs")
+		t.assert_eq(result.files[1].before, { "return 1" }, "baseline content should come from the captured tree")
+
+		vim.cmd.cd(original_cwd)
+	end)
 end)
