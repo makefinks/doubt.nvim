@@ -116,6 +116,9 @@ t.assert_match(filtered, '^<doubt session="copy%-review">', "filtered export sho
 t.assert_eq(filtered:match('kind="reject"'), nil, "filtered export should respect the selected claim kinds")
 
 vim.cmd("DoubtExport review")
+vim.wait(5000, function()
+	return vim.fn.getreg("a"):match("^The reviewer has provided feedback") ~= nil
+end)
 
 local review = vim.fn.getreg("a")
 t.assert_match(review, "^The reviewer has provided feedback for the code in the xml below%.", "review export should prepend the review instructions")
@@ -123,6 +126,9 @@ t.assert_match(review, "Fetch every referenced file and line from the repository
 t.assert_match(review, "\n<doubt session=\"copy%-review\">", "review export should still include the xml payload")
 
 vim.cmd("DoubtExport multi_agent")
+vim.wait(5000, function()
+	return vim.fn.getreg("a"):match("^You are coordinating a response") ~= nil
+end)
 
 local multi_agent = vim.fn.getreg("a")
 t.assert_match(multi_agent, "^You are coordinating a response to feedback the reviewer has provided%.", "multi_agent export should prepend the coordinator instructions")

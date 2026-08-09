@@ -17,6 +17,14 @@ local function trim_output(value)
 	return vim.trim(value or "")
 end
 
+local function command_error(result)
+	if (result.signal or 0) ~= 0 then
+		return string.format("command terminated by signal %s", result.signal)
+	end
+	local stderr = trim_output(result.stderr)
+	return stderr ~= "" and stderr or "command failed"
+end
+
 local function run_command(command, opts)
 	opts = opts or {}
 	local result = vim.system(command, {
@@ -24,10 +32,32 @@ local function run_command(command, opts)
 		env = opts.env,
 		text = true,
 	}):wait()
-	if result.code ~= 0 then
-		return nil, trim_output(result.stderr) ~= "" and trim_output(result.stderr) or "command failed"
+	if result.code ~= 0 or (result.signal or 0) ~= 0 then
+		return nil, command_error(result)
 	end
 	return trim_output(result.stdout)
+end
+
+local function run_command_async(command, opts, callback)
+	opts = opts or {}
+	local ok, process = pcall(vim.system, command, {
+		cwd = opts.cwd,
+		env = opts.env,
+		text = true,
+	}, vim.schedule_wrap(function(result)
+		if result.code ~= 0 or (result.signal or 0) ~= 0 then
+			callback(nil, command_error(result), result)
+			return
+		end
+		callback(trim_output(result.stdout), nil, result)
+	end))
+	if not ok then
+		vim.schedule(function()
+			callback(nil, tostring(process))
+		end)
+		return nil
+	end
+	return process
 end
 
 local function git(root, args, opts)
@@ -36,6 +66,14 @@ local function git(root, args, opts)
 	opts = opts or {}
 	opts.cwd = root
 	return run_command(command, opts)
+end
+
+local function git_async(root, args, opts, callback)
+	local command = { "git", "-C", root }
+	vim.list_extend(command, args)
+	opts = opts or {}
+	opts.cwd = root
+	return run_command_async(command, opts, callback)
 end
 
 local function git_root(workspace)
@@ -49,6 +87,26 @@ local function git_root(workspace)
 		return requested
 	end
 	return root
+end
+
+local function git_root_async(workspace, callback)
+	local requested = vim.fs.normalize(workspace)
+	git_async(workspace, { "rev-parse", "--show-toplevel" }, nil, function(root, err, result)
+		if not root or root == "" then
+			if result and (result.signal or 0) ~= 0 then
+				callback(nil, err)
+			else
+				callback(nil, "Review-run diffs require a Git repository")
+			end
+			return
+		end
+		root = vim.fs.normalize(root)
+		if vim.uv.fs_realpath(root) == vim.uv.fs_realpath(requested) then
+			callback(requested)
+			return
+		end
+		callback(root)
+	end)
 end
 
 local function path_inside(root, path)
@@ -130,6 +188,33 @@ local function copy_index(root, target)
 	end
 end
 
+local function copy_index_async(root, target, callback)
+	git_async(root, { "rev-parse", "--git-path", "index" }, nil, function(index_path, index_error)
+		if not index_path or index_path == "" then
+			callback(index_error)
+			return
+		end
+		if not index_path:match("^/") then
+			index_path = vim.fs.joinpath(root, index_path)
+		end
+		local ok, request = pcall(vim.uv.fs_stat, index_path, function(_, stat)
+			if not stat then
+				callback()
+				return
+			end
+			local copy_ok, copy_request = pcall(vim.uv.fs_copyfile, index_path, target, function(copy_error)
+				callback(copy_error)
+			end)
+			if not copy_ok then
+				callback(tostring(copy_request))
+			end
+		end)
+		if not ok then
+			callback(tostring(request))
+		end
+	end)
+end
+
 local function capture_tree(root)
 	local temporary_index = vim.fn.tempname()
 	copy_index(root, temporary_index)
@@ -159,6 +244,66 @@ local function capture_tree(root)
 		return nil, tree_error
 	end
 	return tree
+end
+
+local function capture_tree_async(root, callback)
+	local temporary_index = vim.fn.tempname()
+	local env = { GIT_INDEX_FILE = temporary_index }
+	local finished = false
+	local function finish(tree, err)
+		if finished then
+			return
+		end
+		finished = true
+		pcall(vim.uv.fs_unlink, temporary_index)
+		callback(tree, err)
+	end
+
+	copy_index_async(root, temporary_index, function(copy_error)
+		if copy_error then
+			finish(nil, copy_error)
+			return
+		end
+		git_async(root, { "add", "-A", "--", "." }, { env = env }, function(_, add_error)
+			if add_error then
+				finish(nil, add_error)
+				return
+			end
+			git_async(root, {
+				"rm",
+				"-r",
+				"-q",
+				"--cached",
+				"--ignore-unmatch",
+				"--",
+				RUNS_RELATIVE_DIR,
+			}, { env = env }, function(_, remove_error)
+				if remove_error then
+					finish(nil, remove_error)
+					return
+				end
+				git_async(root, { "write-tree" }, { env = env }, function(tree, tree_error)
+					if not tree or tree == "" then
+						finish(nil, tree_error)
+						return
+					end
+					finish(tree)
+				end)
+			end)
+		end)
+	end)
+end
+
+function M.capture_tree_async(opts, callback)
+	opts = opts or {}
+	local workspace = opts.workspace or vim.fn.getcwd()
+	git_root_async(workspace, function(root, root_error)
+		if not root then
+			callback(nil, root_error or "Review-run diffs require a Git repository")
+			return
+		end
+		capture_tree_async(root, callback)
+	end)
 end
 
 local function run_dir(root, run_id)

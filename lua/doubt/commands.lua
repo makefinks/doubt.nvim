@@ -146,7 +146,7 @@ function M.register(api)
 	end, { desc = "Open the active doubt session as raw XML handoff" })
 
 	replace_command("DoubtExport", function(command_opts)
-		api.copy_export({ template = command_note(command_opts.args) })
+		api.copy_export_async({ template = command_note(command_opts.args) })
 	end, {
 		desc = "Copy the active doubt session for agent handoff",
 		nargs = "?",

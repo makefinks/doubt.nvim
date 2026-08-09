@@ -21,6 +21,10 @@ local M = {}
 
 local deleted_claim_stack = {}
 local MAX_DELETED_CLAIMS = 50
+local export_snapshot = nil
+local export_snapshot_token = 0
+local export_write_generation = 0
+local EXPORT_SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 
 local ctx = context.new({
 	config = config,
@@ -678,9 +682,11 @@ local function build_export_payload(opts)
 		skipped_stale_claims = 0,
 	}
 
-	local inspection = nil
+	local inspection = opts.inspection
 	if opts.trusted_only then
-		inspection = ctx.refresh_review_run_inspection()
+		if not opts.skip_inspection_refresh then
+			inspection = ctx.refresh_review_run_inspection()
+		end
 		local review_statuses = inspection and inspection.statuses or {}
 		export_files, export_stats = export.select_trusted_files(files, review_statuses)
 	else
@@ -692,19 +698,26 @@ local function build_export_payload(opts)
 	end
 
 	local xml = export.build_session_xml(session_name, export_files)
+
 	local review_run = nil
+	local review_run_deferred = false
 	if opts.create_review_run and export_stats.exportable_claim_count > 0 then
-		review_run = review_runs.create({
-			baseline_tree = inspection and inspection.current_tree or nil,
-			files = export_files,
-			session_name = session_name,
-			session_source = state.active_session_source(),
-			workspace = vim.fn.getcwd(),
-		})
-		if review_run then
-			ctx.invalidate_review_run_inspection()
-			review_run.protocol_text = review_runs.protocol_text(review_run)
-			xml = export.build_session_xml(session_name, export_files, nil, review_run)
+		local baseline_tree = opts.baseline_tree or (inspection and inspection.current_tree) or nil
+		if opts.defer_missing_baseline and not baseline_tree then
+			review_run_deferred = true
+		else
+			review_run = review_runs.create({
+				baseline_tree = baseline_tree,
+				files = export_files,
+				session_name = session_name,
+				session_source = state.active_session_source(),
+				workspace = vim.fn.getcwd(),
+			})
+			if review_run then
+				ctx.invalidate_review_run_inspection()
+				review_run.protocol_text = review_runs.protocol_text(review_run)
+				xml = export.build_session_xml(session_name, export_files, nil, review_run)
+			end
 		end
 	end
 	if not xml then
@@ -735,6 +748,8 @@ local function build_export_payload(opts)
 		review_run = review_run,
 		text = text,
 		xml = xml,
+		inspection = inspection,
+		review_run_deferred = review_run_deferred,
 	}
 end
 
@@ -770,12 +785,7 @@ local function count_claim_kinds(files)
 	return counts
 end
 
-function M.copy_export(opts)
-	opts = opts or {}
-	local payload = build_export_payload(vim.tbl_extend("force", opts, {
-		create_review_run = true,
-		trusted_only = true,
-	}))
+local function copy_export_payload(payload)
 	if not payload then
 		return
 	end
@@ -808,7 +818,107 @@ function M.copy_export(opts)
 	return payload.text
 end
 
-function M.copy_export_with_picker()
+local function stop_export_spinner(snapshot)
+	if not snapshot or export_snapshot ~= snapshot then
+		return
+	end
+	export_snapshot = nil
+	if snapshot.timer then
+		snapshot.timer:stop()
+		if not snapshot.timer:is_closing() then
+			snapshot.timer:close()
+		end
+	end
+	vim.api.nvim_echo({ { "" } }, false, {})
+end
+
+local function start_export_spinner()
+	export_snapshot_token = export_snapshot_token + 1
+	local snapshot = {
+		frame = 0,
+		session_name = state.active_session_name(),
+		session_source = state.active_session_source(),
+		token = export_snapshot_token,
+		workspace = ctx.normalize_path(vim.fn.getcwd()),
+		write_generation = export_write_generation,
+	}
+	snapshot.timer = vim.uv.new_timer()
+	export_snapshot = snapshot
+	snapshot.timer:start(0, 100, vim.schedule_wrap(function()
+		if export_snapshot ~= snapshot then
+			return
+		end
+		snapshot.frame = (snapshot.frame % #EXPORT_SPINNER_FRAMES) + 1
+		vim.api.nvim_echo({
+			{ "Preparing doubt export... " .. EXPORT_SPINNER_FRAMES[snapshot.frame], "ModeMsg" },
+		}, false, {})
+	end))
+	return snapshot
+end
+
+function M.copy_export(opts)
+	opts = opts or {}
+	local payload = build_export_payload(vim.tbl_extend("force", opts, {
+		create_review_run = true,
+		trusted_only = true,
+	}))
+	return copy_export_payload(payload)
+end
+
+function M.copy_export_async(opts)
+	opts = opts or {}
+	if export_snapshot then
+		ctx.notify("A doubt export is already being prepared", vim.log.levels.INFO)
+		return
+	end
+
+	local payload = build_export_payload(vim.tbl_extend("force", opts, {
+		create_review_run = true,
+		defer_missing_baseline = true,
+		trusted_only = true,
+	}))
+	if not payload or payload.exportable_claim_count == 0 or not payload.review_run_deferred then
+		return copy_export_payload(payload)
+	end
+
+	local snapshot = start_export_spinner()
+	review_runs.capture_tree_async({ workspace = snapshot.workspace }, function(tree, err)
+		if export_snapshot ~= snapshot then
+			return
+		end
+		stop_export_spinner(snapshot)
+		if snapshot.write_generation ~= export_write_generation then
+			ctx.notify("Files changed while preparing the doubt export; run :DoubtExport again", vim.log.levels.WARN)
+			return
+		end
+		if snapshot.workspace ~= ctx.normalize_path(vim.fn.getcwd())
+			or snapshot.session_name ~= state.active_session_name()
+			or snapshot.session_source ~= state.active_session_source()
+		then
+			ctx.notify("The active doubt session changed while preparing the export; run :DoubtExport again", vim.log.levels.WARN)
+			return
+		end
+		if not tree then
+			if err == "Review-run diffs require a Git repository" then
+				copy_export_payload(payload)
+			else
+				ctx.notify("Unable to prepare doubt export: " .. (err or "unknown error"), vim.log.levels.ERROR)
+			end
+			return
+		end
+
+		local completed_payload = build_export_payload(vim.tbl_extend("force", opts, {
+			baseline_tree = tree,
+			create_review_run = true,
+			inspection = payload.inspection,
+			skip_inspection_refresh = true,
+			trusted_only = true,
+		}))
+		copy_export_payload(completed_payload)
+	end)
+end
+
+local function copy_export_with_picker(copy)
 	local template_names = M.list_export_templates()
 	if vim.tbl_isempty(template_names) then
 		ctx.notify("No doubt export templates configured", vim.log.levels.WARN)
@@ -825,8 +935,16 @@ function M.copy_export_with_picker()
 			return
 		end
 
-		M.copy_export({ template = choice })
+		copy({ template = choice })
 	end)
+end
+
+function M.copy_export_with_picker()
+	return copy_export_with_picker(M.copy_export)
+end
+
+function M.copy_export_with_picker_async()
+	return copy_export_with_picker(M.copy_export_async)
 end
 
 function M.copy_filtered_export()
@@ -1380,6 +1498,8 @@ function M.rename_workspace_session(opts)
 end
 
 function M.setup(opts)
+	stop_export_spinner(export_snapshot)
+	export_snapshot_token = export_snapshot_token + 1
 	inline_editor.close()
 	ctx.api = M
 	deleted_claim_stack = {}
@@ -1427,6 +1547,7 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		group = ctx.augroup,
 		callback = function()
+			export_write_generation = export_write_generation + 1
 			ctx.invalidate_review_run_inspection()
 		end,
 	})

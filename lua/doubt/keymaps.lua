@@ -68,7 +68,7 @@ function M.register(api, opts)
 
 	if opts.export then
 		set_keymap("export", "n", opts.export, function()
-			api.copy_export()
+			api.copy_export_async()
 		end, DEFAULT_DESC.export)
 	end
 
@@ -120,7 +120,7 @@ function M.register(api, opts)
 	end
 	if export_picker then
 		set_keymap("export_picker", "n", export_picker, function()
-			api.copy_export_with_picker()
+			api.copy_export_with_picker_async()
 		end, DEFAULT_DESC.export_picker)
 	end
 
